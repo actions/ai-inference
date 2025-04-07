@@ -43,8 +43,13 @@ export async function run(): Promise<void> {
     })
 
     if (isUnexpected(response)) {
+      console.log('Unexpected response: ', response)
       throw response.body.error
     }
+
+    console.log('Response: ', response.body)
+    console.log('Choices: ', response.body.choices)
+    console.log('Message: ', response.body.choices[0].message)
 
     const modelResponse: string | null =
       response.body.choices[0].message.content
