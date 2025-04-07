@@ -25,6 +25,7 @@ export async function run(): Promise<void> {
     const endpoint = core.getInput('endpoint')
 
     const client = ModelClient(endpoint, new AzureKeyCredential(token))
+    core.debug('Endpoint: ' + endpoint)
 
     const response = await client.path('/chat/completions').post({
       body: {
@@ -43,13 +44,13 @@ export async function run(): Promise<void> {
     })
 
     if (isUnexpected(response)) {
-      console.log('Unexpected response: ', response)
+      core.debug('Unexpected response: ' + response)
       throw response.body.error
     }
 
-    console.log('Response: ', response.body)
-    console.log('Choices: ', response.body.choices)
-    console.log('Message: ', response.body.choices[0].message)
+    core.debug('Response: ' + response.body)
+    core.debug('Choices: ' + response.body.choices)
+    core.debug('Message: ' + response.body.choices[0].message)
 
     const modelResponse: string | null =
       response.body.choices[0].message.content
