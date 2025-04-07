@@ -16,7 +16,7 @@ inputs:
   model:
     description: The model to use
     required: false
-    default: 'gpt-4o'
+    default: 'openai/gpt-4o'
   endpoint:
     description: The endpoint to use
     required: false
