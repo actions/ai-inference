@@ -33584,7 +33584,13 @@ async function run() {
             }
         });
         if (isUnexpected(response)) {
-            throw response.body.error;
+            if (response.body.error) {
+                throw response.body.error;
+            }
+            throw new Error('An error occurred while fetching the response (' +
+                response.status +
+                '): ' +
+                response.body);
         }
         const modelResponse = response.body.choices[0].message.content;
         // Set outputs for other workflow steps to use
@@ -33592,8 +33598,12 @@ async function run() {
     }
     catch (error) {
         // Fail the workflow run if an error occurs
-        if (error instanceof Error)
+        if (error instanceof Error) {
             coreExports.setFailed(error.message);
+        }
+        else {
+            coreExports.setFailed('An unexpected error occurred');
+        }
     }
 }
 
