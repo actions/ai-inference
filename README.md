@@ -7,7 +7,7 @@
 [![Coverage](./badges/coverage.svg)](./badges/coverage.svg)
 
 Use AI models from [GitHub Models](https://github.com/marketplace/models) in
-your actions.
+your workflows.
 
 ## Usage
 
