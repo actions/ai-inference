@@ -33574,7 +33574,22 @@ async function run() {
         else {
             throw new Error('prompt is not set');
         }
-        const systemPrompt = coreExports.getInput('system-prompt');
+        const systemPromptFile = coreExports.getInput('system-prompt-file');
+        const systemPromptString = coreExports.getInput('system-prompt');
+        let systemPrompt;
+        if (systemPromptFile !== undefined && systemPromptFile !== '') {
+            if (!fs.existsSync(systemPromptFile)) {
+                throw new Error(`System prompt file not found: ${systemPromptFile}`);
+            }
+            systemPrompt = fs.readFileSync(systemPromptFile, 'utf-8');
+        }
+        else if (systemPromptString !== undefined && systemPromptString !== '') {
+            systemPrompt = systemPromptString;
+        }
+        else {
+            // Use default system prompt
+            systemPrompt = 'You are a helpful assistant';
+        }
         const modelName = coreExports.getInput('model');
         const maxTokens = parseInt(coreExports.getInput('max-tokens'), 10);
         const token = coreExports.getInput('token') || process.env['GITHUB_TOKEN'];

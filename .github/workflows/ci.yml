@@ -80,11 +80,16 @@ jobs:
       - name: Create Prompt File
         run: echo "hello" > prompt.txt
 
+      - name: Create System Prompt File
+        run:
+          echo "You are a helpful AI assistant for testing." > system-prompt.txt
+
       - name: Test Local Action with Prompt File
         id: test-action-prompt-file
         uses: ./
         with:
           prompt-file: prompt.txt
+          system-prompt-file: system-prompt.txt
         env:
           GITHUB_TOKEN: ${{ github.token }}
 

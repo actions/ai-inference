@@ -29,6 +29,10 @@ inputs:
     description: The system prompt for the model
     required: false
     default: 'You are a helpful assistant'
+  system-prompt-file:
+    description: Path to a file containing the system prompt
+    required: false
+    default: ''
   max-tokens:
     description: The maximum number of tokens to generate
     required: false

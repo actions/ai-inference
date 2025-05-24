@@ -29,7 +29,22 @@ export async function run(): Promise<void> {
       throw new Error('prompt is not set')
     }
 
-    const systemPrompt: string = core.getInput('system-prompt')
+    const systemPromptFile: string = core.getInput('system-prompt-file')
+    const systemPromptString: string = core.getInput('system-prompt')
+
+    let systemPrompt: string
+    if (systemPromptFile !== undefined && systemPromptFile !== '') {
+      if (!fs.existsSync(systemPromptFile)) {
+        throw new Error(`System prompt file not found: ${systemPromptFile}`)
+      }
+      systemPrompt = fs.readFileSync(systemPromptFile, 'utf-8')
+    } else if (systemPromptString !== undefined && systemPromptString !== '') {
+      systemPrompt = systemPromptString
+    } else {
+      // Use default system prompt
+      systemPrompt = 'You are a helpful assistant'
+    }
+
     const modelName: string = core.getInput('model')
     const maxTokens: number = parseInt(core.getInput('max-tokens'), 10)
 
