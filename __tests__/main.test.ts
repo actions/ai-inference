@@ -7,6 +7,7 @@
  */
 import { jest } from '@jest/globals'
 import * as core from '../__fixtures__/core.js'
+
 const mockPost = jest.fn().mockImplementation(() => ({
   body: {
     choices: [
@@ -31,28 +32,30 @@ jest.unstable_mockModule('@azure-rest/ai-inference', () => ({
 // Default to throwing errors to catch unexpected calls
 const mockExistsSync = jest.fn().mockImplementation(() => {
   throw new Error(
-    'Unexpected call to existsSync - test should override this implementation'
+    `Unexpected call: fs.existsSync(${mockExistsSync.mock.calls})`
   )
 })
 const mockReadFileSync = jest.fn().mockImplementation(() => {
   throw new Error(
-    'Unexpected call to readFileSync - test should override this implementation'
+    `Unexpected call: fs.readFileSync(${mockReadFileSync.mock.calls})`
   )
 })
+const mockWriteFileSync = jest.fn()
+const mockMkdirSync = jest.fn()
 
 /**
  * Helper function to mock file system operations for one or more files
- * @param fileContents - Object mapping file paths to their contents
- * @param nonExistentFiles - Array of file paths that should be treated as non-existent
+ * @param fileContents - Object mapping paths to their contents
+ * @param nonExistentPaths - Array of file paths that should be treated as non-existent
  */
 function mockFileContent(
   fileContents: Record<string, string> = {},
-  nonExistentFiles: string[] = []
+  nonExistentPaths: string[] = []
 ): void {
-  // Mock existsSync to return true for files that exist, false for those that don't
+  // Mock existsSync to return true for paths that exist, false for those that don't
   mockExistsSync.mockImplementation((...args: unknown[]): boolean => {
     const [path] = args as [string]
-    if (nonExistentFiles.includes(path)) {
+    if (nonExistentPaths.includes(path)) {
       return false
     }
     return path in fileContents || true
@@ -88,19 +91,42 @@ function mockInputs(inputs: Record<string, string> = {}): void {
 
 /**
  * Helper function to verify common response assertions
+ * @param customResponseFile - Optional custom response file path. If not provided, verifies standard response with default path
  */
-function verifyStandardResponse(): void {
+function verifyStandardResponse(customResponseFile?: string): void {
+  expect(core.setFailed).not.toHaveBeenCalled()
   expect(core.setOutput).toHaveBeenNthCalledWith(1, 'response', 'Hello, user!')
-  expect(core.setOutput).toHaveBeenNthCalledWith(
-    2,
-    'response-file',
-    expect.stringContaining('modelResponse.txt')
-  )
+
+  if (customResponseFile) {
+    expect(core.setOutput).toHaveBeenNthCalledWith(
+      2,
+      'response-file',
+      customResponseFile
+    )
+    expect(mockWriteFileSync).toHaveBeenCalledWith(
+      customResponseFile,
+      'Hello, user!',
+      'utf-8'
+    )
+  } else {
+    expect(core.setOutput).toHaveBeenNthCalledWith(
+      2,
+      'response-file',
+      expect.stringContaining('modelResponse.txt')
+    )
+    expect(mockWriteFileSync).toHaveBeenCalledWith(
+      expect.stringContaining('modelResponse.txt'),
+      'Hello, user!',
+      'utf-8'
+    )
+  }
 }
 
 jest.unstable_mockModule('fs', () => ({
   existsSync: mockExistsSync,
-  readFileSync: mockReadFileSync
+  readFileSync: mockReadFileSync,
+  writeFileSync: mockWriteFileSync,
+  mkdirSync: mockMkdirSync
 }))
 
 jest.unstable_mockModule('@actions/core', () => core)
@@ -126,6 +152,31 @@ describe('main.ts', () => {
 
     expect(core.setOutput).toHaveBeenCalled()
     verifyStandardResponse()
+  })
+
+  it('Sets the response output when no system prompt is set', async () => {
+    // Set the action's inputs as return values from core.getInput().
+    mockInputs({
+      prompt: 'Hello, AI!'
+    })
+
+    await run()
+
+    expect(core.setOutput).toHaveBeenCalled()
+    verifyStandardResponse()
+  })
+
+  it('Sets a failed status when no token is set', async () => {
+    // Clear the getInput mock and simulate no prompt or prompt-file input
+    mockInputs({
+      prompt: 'Hello, AI!',
+      token: ''
+    })
+
+    await run()
+
+    // Verify that the action was marked as failed.
+    expect(core.setFailed).toHaveBeenNthCalledWith(1, 'GITHUB_TOKEN is not set')
   })
 
   it('Sets a failed status when no prompt is set', async () => {
@@ -161,7 +212,6 @@ describe('main.ts', () => {
 
     await run()
 
-    expect(mockExistsSync).toHaveBeenCalledWith(promptFile)
     expect(mockReadFileSync).toHaveBeenCalledWith(promptFile, 'utf-8')
     verifyStandardResponse()
   })
@@ -355,7 +405,7 @@ describe('main.ts', () => {
   })
 
   it('passes custom max-tokens parameter to the model', async () => {
-    const customMaxTokens = 500
+    const customMaxTokens = 42
 
     mockInputs({
       prompt: 'Hello, AI!',
@@ -375,5 +425,96 @@ describe('main.ts', () => {
     })
 
     verifyStandardResponse()
+  })
+
+  it('uses custom response-file path when provided', async () => {
+    const customResponseFile = '/custom/path/response.txt'
+
+    mockInputs({
+      prompt: 'Hello, AI!',
+      'system-prompt': 'You are a test assistant.',
+      'response-file': customResponseFile
+    })
+    mockFileContent({}, ['/custom/path'])
+
+    await run()
+
+    expect(mockExistsSync).toHaveBeenCalledWith('/custom/path')
+    expect(mockMkdirSync).toHaveBeenCalledWith('/custom/path', {
+      recursive: true
+    })
+    verifyStandardResponse(customResponseFile)
+  })
+
+  it('uses default response-file path when not provided', async () => {
+    mockInputs({
+      prompt: 'Hello, AI!',
+      'system-prompt': 'You are a test assistant.'
+    })
+
+    await run()
+
+    expect(mockExistsSync).not.toHaveBeenCalled()
+    expect(mockMkdirSync).not.toHaveBeenCalled()
+    verifyStandardResponse()
+  })
+
+  it('handles empty model response content', async () => {
+    // Mock the API client to return empty string content
+    mockPost.mockImplementationOnce(() => ({
+      body: {
+        choices: [
+          {
+            message: {
+              content: ''
+            }
+          }
+        ]
+      }
+    }))
+
+    mockInputs({
+      prompt: 'Hello, AI!'
+    })
+
+    await run()
+
+    expect(core.setFailed).not.toHaveBeenCalled()
+    expect(core.setOutput).toHaveBeenNthCalledWith(1, 'response', '')
+    expect(mockWriteFileSync).toHaveBeenCalledWith(
+      expect.stringContaining('modelResponse.txt'),
+      '',
+      'utf-8'
+    )
+  })
+
+  it('handles Error exceptions gracefully', async () => {
+    // Mock the API client to throw a non-Error object
+    mockPost.mockImplementationOnce(() => {
+      throw Error('Strange error')
+    })
+
+    mockInputs({
+      prompt: 'Hello, AI!'
+    })
+
+    await run()
+
+    expect(core.setFailed).toHaveBeenCalledWith('Strange error')
+  })
+
+  it('handles non-Error exceptions gracefully', async () => {
+    // Mock the API client to throw a non-Error object
+    mockPost.mockImplementationOnce(() => {
+      throw 'String error' // Not an Error instance
+    })
+
+    mockInputs({
+      prompt: 'Hello, AI!'
+    })
+
+    await run()
+
+    expect(core.setFailed).toHaveBeenCalledWith('An unexpected error occurred')
   })
 })

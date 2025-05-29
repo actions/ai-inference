@@ -37,6 +37,28 @@ function loadContentFromFileOrInput(
 }
 
 /**
+ * Helper function to prepare and ensure the response file path is ready to be used
+ * @returns The prepared response file path with directory created if needed
+ */
+function getResponseFilePath(): string {
+  const responseFileInput = core.getInput('response-file')
+  const hasCustomPath = responseFileInput && responseFileInput !== ''
+
+  const responseFilePath = hasCustomPath
+    ? responseFileInput
+    : path.join(tempDir(), RESPONSE_FILE)
+
+  if (hasCustomPath) {
+    const responseDir = path.dirname(responseFilePath)
+    if (!fs.existsSync(responseDir)) {
+      fs.mkdirSync(responseDir, { recursive: true })
+    }
+  }
+
+  return responseFilePath
+}
+
+/**
  * The main function for the action.
  *
  * @returns Resolves when the action is complete.
@@ -57,7 +79,7 @@ export async function run(): Promise<void> {
     const maxTokens: number = parseInt(core.getInput('max-tokens'), 10)
 
     const token = core.getInput('token') || process.env['GITHUB_TOKEN']
-    if (token === undefined) {
+    if (token === undefined || token === '') {
       throw new Error('GITHUB_TOKEN is not set')
     }
 
@@ -93,19 +115,15 @@ export async function run(): Promise<void> {
       )
     }
 
-    const modelResponse: string | null =
-      response.body.choices[0].message.content
+    const modelResponse: string = response.body.choices[0].message.content || ''
 
     // Set outputs for other workflow steps to use
-    core.setOutput('response', modelResponse || '')
+    core.setOutput('response', modelResponse)
 
     // Save the response to a file in case the response overflow the output limit
-    const responseFilePath = path.join(tempDir(), RESPONSE_FILE)
+    const responseFilePath = getResponseFilePath()
     core.setOutput('response-file', responseFilePath)
-
-    if (modelResponse && modelResponse !== '') {
-      fs.writeFileSync(responseFilePath, modelResponse, 'utf-8')
-    }
+    fs.writeFileSync(responseFilePath, modelResponse, 'utf-8')
   } catch (error) {
     // Fail the workflow run if an error occurs
     if (error instanceof Error) {
