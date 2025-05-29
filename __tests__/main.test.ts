@@ -481,7 +481,11 @@ describe('main.ts', () => {
 
     expect(core.setFailed).not.toHaveBeenCalled()
     expect(core.setOutput).toHaveBeenNthCalledWith(1, 'response', '')
-    expect(mockWriteFileSync).not.toHaveBeenCalled()
+    expect(mockWriteFileSync).toHaveBeenCalledWith(
+      expect.stringContaining('modelResponse.txt'),
+      '',
+      'utf-8'
+    )
   })
 
   it('handles Error exceptions gracefully', async () => {

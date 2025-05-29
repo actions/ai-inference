@@ -34372,6 +34372,24 @@ function loadContentFromFileOrInput(filePathInput, contentInput, defaultValue) {
     }
 }
 /**
+ * Helper function to prepare and ensure the response file path is ready to be used
+ * @returns The prepared response file path with directory created if needed
+ */
+function getResponseFilePath() {
+    const responseFileInput = coreExports.getInput('response-file');
+    const hasCustomPath = responseFileInput && responseFileInput !== '';
+    const responseFilePath = hasCustomPath
+        ? responseFileInput
+        : require$$1.join(tempDir(), RESPONSE_FILE);
+    if (hasCustomPath) {
+        const responseDir = require$$1.dirname(responseFilePath);
+        if (!fs.existsSync(responseDir)) {
+            fs.mkdirSync(responseDir, { recursive: true });
+        }
+    }
+    return responseFilePath;
+}
+/**
  * The main function for the action.
  *
  * @returns Resolves when the action is complete.
@@ -34414,25 +34432,13 @@ async function run() {
                 '): ' +
                 response.body);
         }
-        const modelResponse = response.body.choices[0].message.content;
+        const modelResponse = response.body.choices[0].message.content || '';
         // Set outputs for other workflow steps to use
-        coreExports.setOutput('response', modelResponse || '');
+        coreExports.setOutput('response', modelResponse);
         // Save the response to a file in case the response overflow the output limit
-        const responseFileInput = coreExports.getInput('response-file');
-        const responseFilePath = responseFileInput && responseFileInput !== ''
-            ? responseFileInput
-            : require$$1.join(tempDir(), RESPONSE_FILE);
+        const responseFilePath = getResponseFilePath();
         coreExports.setOutput('response-file', responseFilePath);
-        if (modelResponse && modelResponse !== '') {
-            // Ensure the directory exists if a custom path is provided
-            if (responseFileInput && responseFileInput !== '') {
-                const responseDir = require$$1.dirname(responseFilePath);
-                if (!fs.existsSync(responseDir)) {
-                    fs.mkdirSync(responseDir, { recursive: true });
-                }
-            }
-            fs.writeFileSync(responseFilePath, modelResponse, 'utf-8');
-        }
+        fs.writeFileSync(responseFilePath, modelResponse, 'utf-8');
     }
     catch (error) {
         // Fail the workflow run if an error occurs
