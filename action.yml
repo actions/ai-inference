@@ -41,6 +41,10 @@ inputs:
     description: The token to use
     required: false
     default: ${{ github.token }}
+  response-file:
+    description: The file path where the response should be saved
+    required: false
+    default: ''
 
 # Define your outputs here.
 outputs:

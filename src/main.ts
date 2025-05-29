@@ -57,7 +57,7 @@ export async function run(): Promise<void> {
     const maxTokens: number = parseInt(core.getInput('max-tokens'), 10)
 
     const token = core.getInput('token') || process.env['GITHUB_TOKEN']
-    if (token === undefined) {
+    if (token === undefined || token === '') {
       throw new Error('GITHUB_TOKEN is not set')
     }
 
@@ -100,10 +100,21 @@ export async function run(): Promise<void> {
     core.setOutput('response', modelResponse || '')
 
     // Save the response to a file in case the response overflow the output limit
-    const responseFilePath = path.join(tempDir(), RESPONSE_FILE)
+    const responseFileInput = core.getInput('response-file')
+    const responseFilePath =
+      responseFileInput && responseFileInput !== ''
+        ? responseFileInput
+        : path.join(tempDir(), RESPONSE_FILE)
     core.setOutput('response-file', responseFilePath)
 
     if (modelResponse && modelResponse !== '') {
+      // Ensure the directory exists if a custom path is provided
+      if (responseFileInput && responseFileInput !== '') {
+        const responseDir = path.dirname(responseFilePath)
+        if (!fs.existsSync(responseDir)) {
+          fs.mkdirSync(responseDir, { recursive: true })
+        }
+      }
       fs.writeFileSync(responseFilePath, modelResponse, 'utf-8')
     }
   } catch (error) {
