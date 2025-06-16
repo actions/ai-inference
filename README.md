@@ -80,6 +80,25 @@ steps:
       cat "${{ steps.inference.outputs.response-file }}"
 ```
 
+### Using a custom output from file
+
+This can be useful when model response exceeds actions output limit
+
+```yaml
+steps:
+  - name: Test Local Action
+    id: inference
+    uses: actions/ai-inference@v1
+    with:
+      prompt: 'Hello!'
+      response-file: './path/to/response.txt'
+
+  - name: Use Response File
+    run: |
+      echo "Response saved to: ./path/to/response.txt"
+      cat "./path/to/response.txt"
+```
+
 ## Inputs
 
 Various inputs are defined in [`action.yml`](action.yml) to let you configure
@@ -92,6 +111,7 @@ the action:
 | `prompt-file`        | Path to a file containing the prompt. If both `prompt` and `prompt-file` are provided, `prompt-file` takes precedence                             | `""`                                 |
 | `system-prompt`      | The system prompt to send to the model                                                                                                            | `"You are a helpful assistant"`      |
 | `system-prompt-file` | Path to a file containing the system prompt. If both `system-prompt` and `system-prompt-file` are provided, `system-prompt-file` takes precedence | `""`                                 |
+| `response-file`      | The file path where the response should be saved.                                                                                                 | `""`                                 |
 | `model`              | The model to use for inference. Must be available in the [GitHub Models](https://github.com/marketplace?type=models) catalog                      | `gpt-4o`                             |
 | `endpoint`           | The endpoint to use for inference. If you're running this as part of an org, you should probably use the org-specific Models endpoint             | `https://models.github.ai/inference` |
 | `max-tokens`         | The max number of tokens to generate                                                                                                              | 200                                  |
