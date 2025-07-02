@@ -34406,13 +34406,23 @@ async function run() {
             }
         });
         if (isUnexpected(response)) {
-            if (response.body.error) {
+            // Extract x-ms-error-code from headers if available
+            const errorCode = response.headers['x-ms-error-code'];
+            const errorCodeMsg = errorCode ? ` (error code: ${errorCode})` : '';
+            // Check if response body exists and contains error details
+            if (response.body && response.body.error) {
                 throw response.body.error;
             }
-            throw new Error('An error occurred while fetching the response (' +
-                response.status +
-                '): ' +
-                response.body);
+            // Handle case where response body is missing
+            if (!response.body) {
+                throw new Error(`Failed to get response from AI service (status: ${response.status})${errorCodeMsg}. ` +
+                    'Please check network connection and endpoint configuration.');
+            }
+            // Handle other error cases
+            throw new Error(`AI service returned error response (status: ${response.status})${errorCodeMsg}: ` +
+                (typeof response.body === 'string'
+                    ? response.body
+                    : JSON.stringify(response.body)));
         }
         const modelResponse = response.body.choices[0].message.content;
         // Set outputs for other workflow steps to use
