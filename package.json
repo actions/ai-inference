@@ -24,7 +24,7 @@
   "license": "MIT",
   "dependencies": {
     "@actions/core": "^1.11.1",
-    "@modelcontextprotocol/sdk": "^1.15.1",
+    "@modelcontextprotocol/sdk": "^1.16.0",
     "@rollup/plugin-json": "^6.1.0",
     "@types/js-yaml": "^4.0.9",
     "js-yaml": "^4.1.0",
