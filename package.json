@@ -24,7 +24,7 @@
   "prettier": "@github/prettier-config",
   "dependencies": {
     "@actions/core": "^1.11.1",
-    "@modelcontextprotocol/sdk": "^1.15.1",
+    "@modelcontextprotocol/sdk": "^1.17.0",
     "js-yaml": "^4.1.0",
     "pkce-challenge": "^5.0.0"
   },
