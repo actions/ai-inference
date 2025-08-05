@@ -101,10 +101,15 @@ export async function mcpInference(
       tools: githubMcpClient.tools as OpenAI.Chat.Completions.ChatCompletionTool[],
     }
 
-    // Add response format if specified (only on first iteration to avoid conflicts)
-    if (iterationCount === 1 && request.responseFormat) {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      chatCompletionRequest.response_format = request.responseFormat as any
+    // Add response format if specified - but only when not expecting tool calls
+    // On iterations after the first, we check if we expect this to be the final response
+    if (request.responseFormat) {
+      // For the first iteration, let the model decide between tools and final response
+      // For subsequent iterations, we know tools were called, so this should be final response
+      if (iterationCount > 1) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        chatCompletionRequest.response_format = request.responseFormat as any
+      }
     }
 
     try {
@@ -128,6 +133,26 @@ export async function mcpInference(
 
       if (!toolCalls || toolCalls.length === 0) {
         core.info('No tool calls requested, ending GitHub MCP inference loop')
+
+        // If we have a response format requirement and this is the final response,
+        // but it doesn't look like proper JSON, try one more time with explicit JSON request
+        if (request.responseFormat && modelResponse && iterationCount === 1) {
+          const content = modelResponse.trim()
+          if (!content.startsWith('{') && !content.startsWith('[')) {
+            core.info('First response does not appear to be in JSON format, requesting JSON format explicitly...')
+
+            // Add a user message requesting JSON format and try again
+            messages.push({
+              role: 'user',
+              content:
+                'Please provide your response in the exact JSON format specified in the schema. Return only valid JSON without any additional text or explanation.',
+            })
+
+            // Continue the loop to get a properly formatted response
+            continue
+          }
+        }
+
         return modelResponse || null
       }
 
