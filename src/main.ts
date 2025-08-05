@@ -2,7 +2,7 @@ import * as core from '@actions/core'
 import * as fs from 'fs'
 import * as os from 'os'
 import * as path from 'path'
-import {connectToGitHubMCP} from './mcp.js'
+import {connectToGitHubMCP, GitHubMCPClient} from './mcp.js'
 import {simpleInference, mcpInference} from './inference.js'
 import {loadContentFromFileOrInput, buildInferenceRequest} from './helpers.js'
 import {
@@ -77,12 +77,28 @@ export async function run(): Promise<void> {
     const enableMcp = core.getBooleanInput('enable-github-mcp') || false
 
     let modelResponse: string | null = null
+    let mcpClient: GitHubMCPClient | null = null
 
     if (enableMcp) {
-      const mcpClient = await connectToGitHubMCP(githubMcpToken)
+      mcpClient = await connectToGitHubMCP(githubMcpToken)
 
       if (mcpClient) {
-        modelResponse = await mcpInference(inferenceRequest, mcpClient)
+        try {
+          modelResponse = await mcpInference(inferenceRequest, mcpClient)
+        } finally {
+          // Always close the MCP client connection to prevent hanging
+          core.info('Closing GitHub MCP client connection...')
+          try {
+            if (mcpClient?.client?.close) {
+              await mcpClient.client.close()
+            } else if (mcpClient?.client?.transport?.close) {
+              await mcpClient.client.transport.close()
+            }
+            core.info('GitHub MCP client connection closed')
+          } catch (closeError) {
+            core.warning(`Failed to close MCP client connection: ${closeError}`)
+          }
+        }
       } else {
         core.warning('MCP connection failed, falling back to simple inference')
         modelResponse = await simpleInference(inferenceRequest)

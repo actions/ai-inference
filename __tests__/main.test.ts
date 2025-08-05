@@ -168,9 +168,10 @@ describe('main.ts', () => {
   })
 
   it('uses MCP inference when enabled and connection succeeds', async () => {
+    const mockClose = vi.fn().mockResolvedValue(undefined)
     const mockMcpClient = {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      client: {} as any,
+      client: {close: mockClose} as any,
       tools: [{type: 'function', function: {name: 'test-tool'}}],
     }
 
@@ -196,6 +197,7 @@ describe('main.ts', () => {
       mockMcpClient,
     )
     expect(mockSimpleInference).not.toHaveBeenCalled()
+    expect(mockClose).toHaveBeenCalledOnce() // Verify the close method was called
     verifyStandardResponse()
   })
 
@@ -214,6 +216,51 @@ describe('main.ts', () => {
     expect(mockSimpleInference).toHaveBeenCalled()
     expect(mockMcpInference).not.toHaveBeenCalled()
     expect(core.warning).toHaveBeenCalledWith('MCP connection failed, falling back to simple inference')
+    verifyStandardResponse()
+  })
+
+  it('handles MCP client close errors gracefully', async () => {
+    const mockClose = vi.fn().mockRejectedValue(new Error('Close failed'))
+    const mockMcpClient = {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      client: {close: mockClose} as any,
+      tools: [{type: 'function', function: {name: 'test-tool'}}],
+    }
+
+    mockInputs({
+      prompt: 'Hello, AI!',
+      'system-prompt': 'You are a test assistant.',
+      'enable-github-mcp': 'true',
+    })
+
+    mockConnectToGitHubMCP.mockResolvedValue(mockMcpClient)
+
+    await run()
+
+    expect(mockClose).toHaveBeenCalledOnce()
+    expect(core.warning).toHaveBeenCalledWith('Failed to close MCP client connection: Error: Close failed')
+    verifyStandardResponse()
+  })
+
+  it('handles MCP client without close method', async () => {
+    const mockMcpClient = {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      client: {} as any, // No close method
+      tools: [{type: 'function', function: {name: 'test-tool'}}],
+    }
+
+    mockInputs({
+      prompt: 'Hello, AI!',
+      'system-prompt': 'You are a test assistant.',
+      'enable-github-mcp': 'true',
+    })
+
+    mockConnectToGitHubMCP.mockResolvedValue(mockMcpClient)
+
+    await run()
+
+    // Should not throw error even without close method
+    expect(mockMcpInference).toHaveBeenCalled()
     verifyStandardResponse()
   })
 
