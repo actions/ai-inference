@@ -6,7 +6,7 @@
     ".": "./dist/index.js"
   },
   "engines": {
-    "node": ">=20"
+    "node": ">=24"
   },
   "scripts": {
     "bundle": "npm run format:write && npm run package",
@@ -38,7 +38,7 @@
     "@rollup/plugin-node-resolve": "^16.0.1",
     "@rollup/plugin-typescript": "^12.1.2",
     "@types/js-yaml": "^4.0.9",
-    "@types/node": "^22.15.31",
+    "@types/node": "^24.1.0",
     "@typescript-eslint/eslint-plugin": "^8.34.0",
     "@typescript-eslint/parser": "^8.32.1",
     "eslint": "^9.29.0",
