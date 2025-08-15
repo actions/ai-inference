@@ -55,7 +55,7 @@ inputs:
     required: false
     default: 'false'
   github-mcp-token:
-    description: The token to use for GitHub MCP server (defaults to GITHUB_TOKEN if not specified)
+    description: The token to use for GitHub MCP server (defaults to the main token if not specified). This must be a PAT for MCP to work.
     required: false
     default: ''
 
