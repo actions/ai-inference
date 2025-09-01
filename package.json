@@ -27,7 +27,7 @@
     "@modelcontextprotocol/sdk": "^1.15.1",
     "@types/tmp": "^0.2.6",
     "js-yaml": "^4.1.0",
-    "openai": "^5.11.0",
+    "openai": "^5.16.0",
     "pkce-challenge": "^5.0.0",
     "tmp": "^0.2.4"
   },
