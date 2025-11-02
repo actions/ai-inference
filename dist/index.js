@@ -42717,15 +42717,24 @@ class StreamableHTTPClientTransport {
 /**
  * Connect to the GitHub MCP server and retrieve available tools
  */
-async function connectToGitHubMCP(token) {
+async function connectToGitHubMCP(token, toolsets) {
     const githubMcpUrl = 'https://api.githubcopilot.com/mcp/';
     coreExports.info('Connecting to GitHub MCP server...');
+    const headers = {
+        Authorization: `Bearer ${token}`,
+        'X-MCP-Readonly': 'true',
+    };
+    // Add toolsets header if specified
+    if (toolsets && toolsets.trim() !== '') {
+        headers['X-MCP-Toolsets'] = toolsets;
+        coreExports.info(`Using GitHub MCP toolsets: ${toolsets}`);
+    }
+    else {
+        coreExports.info('Using default GitHub MCP toolsets');
+    }
     const transport = new StreamableHTTPClientTransport(new URL(githubMcpUrl), {
         requestInit: {
-            headers: {
-                Authorization: `Bearer ${token}`,
-                'X-MCP-Readonly': 'true',
-            },
+            headers,
         },
     });
     const client = new Client({
@@ -52642,13 +52651,14 @@ async function run() {
         }
         // Get GitHub MCP token (use dedicated token if provided, otherwise fall back to main token)
         const githubMcpToken = coreExports.getInput('github-mcp-token') || token;
+        const githubMcpToolsets = coreExports.getInput('github-mcp-toolsets');
         const endpoint = coreExports.getInput('endpoint');
         // Build the inference request with pre-processed messages and response format
         const inferenceRequest = buildInferenceRequest(promptConfig, systemPrompt, prompt, modelName, maxTokens, endpoint, token);
         const enableMcp = coreExports.getBooleanInput('enable-github-mcp') || false;
         let modelResponse = null;
         if (enableMcp) {
-            const mcpClient = await connectToGitHubMCP(githubMcpToken);
+            const mcpClient = await connectToGitHubMCP(githubMcpToken, githubMcpToolsets);
             if (mcpClient) {
                 modelResponse = await mcpInference(inferenceRequest, mcpClient);
             }
