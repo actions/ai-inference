@@ -62,6 +62,7 @@ export async function run(): Promise<void> {
 
     // Get GitHub MCP token (use dedicated token if provided, otherwise fall back to main token)
     const githubMcpToken = core.getInput('github-mcp-token') || token
+    const githubMcpToolsets = core.getInput('github-mcp-toolsets')
 
     const endpoint = core.getInput('endpoint')
 
@@ -81,7 +82,7 @@ export async function run(): Promise<void> {
     let modelResponse: string | null = null
 
     if (enableMcp) {
-      const mcpClient = await connectToGitHubMCP(githubMcpToken)
+      const mcpClient = await connectToGitHubMCP(githubMcpToken, githubMcpToolsets)
 
       if (mcpClient) {
         modelResponse = await mcpInference(inferenceRequest, mcpClient)

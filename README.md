@@ -24,7 +24,7 @@ jobs:
     steps:
       - name: Test Local Action
         id: inference
-        uses: actions/ai-inference@v1
+        uses: actions/ai-inference@v2
         with:
           prompt: 'Hello!'
 
@@ -42,7 +42,7 @@ supports both plain text files and structured `.prompt.yml` files:
 steps:
   - name: Run AI Inference with Text File
     id: inference
-    uses: actions/ai-inference@v1
+    uses: actions/ai-inference@v2
     with:
       prompt-file: './path/to/prompt.txt'
 ```
@@ -56,7 +56,7 @@ support templating, custom models, and JSON schema responses:
 steps:
   - name: Run AI Inference with Prompt YAML
     id: inference
-    uses: actions/ai-inference@v1
+    uses: actions/ai-inference@v2
     with:
       prompt-file: './.github/prompts/sample.prompt.yml'
       input: |
@@ -132,7 +132,7 @@ of an inline system prompt:
 steps:
   - name: Run AI Inference with System Prompt File
     id: inference
-    uses: actions/ai-inference@v1
+    uses: actions/ai-inference@v2
     with:
       prompt: 'Hello!'
       system-prompt-file: './path/to/system-prompt.txt'
@@ -146,7 +146,7 @@ This can be useful when model response exceeds actions output limit
 steps:
   - name: Test Local Action
     id: inference
-    uses: actions/ai-inference@v1
+    uses: actions/ai-inference@v2
     with:
       prompt: 'Hello!'
 
@@ -169,7 +169,7 @@ repository management, issue tracking, and pull request operations.
 steps:
   - name: AI Inference with GitHub Tools
     id: inference
-    uses: actions/ai-inference@v1.2
+    uses: actions/ai-inference@v2
     with:
       prompt: 'List my open pull requests and create a summary'
       enable-github-mcp: true
@@ -183,13 +183,33 @@ and the GitHub MCP server:
 steps:
   - name: AI Inference with Separate MCP Token
     id: inference
-    uses: actions/ai-inference@v1.2
+    uses: actions/ai-inference@v2
     with:
       prompt: 'List my open pull requests and create a summary'
       enable-github-mcp: true
       token: ${{ secrets.GITHUB_TOKEN }}
       github-mcp-token: ${{ secrets.USER_PAT }}
 ```
+
+#### Configuring GitHub MCP Toolsets
+
+By default, the GitHub MCP server provides a standard set of tools (`context`, `repos`, `issues`, `pull_requests`, `users`). You can customize which toolsets are available by specifying the `github-mcp-toolsets` parameter:
+
+```yaml
+steps:
+  - name: AI Inference with Custom Toolsets
+    id: inference
+    uses: actions/ai-inference@v2
+    with:
+      prompt: 'Analyze recent workflow runs and check security alerts'
+      enable-github-mcp: true
+      token: ${{ secrets.USER_PAT }}
+      github-mcp-toolsets: 'repos,issues,pull_requests,actions,code_security'
+```
+
+**Available toolsets:**
+See: https://github.com/github/github-mcp-server/blob/main/README.md#tool-configuration
+
 
 When MCP is enabled, the AI model will have access to GitHub tools and can
 perform actions like searching issues and PRs.
@@ -213,6 +233,7 @@ the action:
 | `max-tokens`         | The max number of tokens to generate                                                                                                                          | 200                                  |
 | `enable-github-mcp`  | Enable Model Context Protocol integration with GitHub tools                                                                                                   | `false`                              |
 | `github-mcp-token`   | Token to use for GitHub MCP server (defaults to the main token if not specified). This must be a PAT for MCP to work                                          | `""`                                 |
+| `github-mcp-toolsets` | Comma-separated list of toolsets to enable for GitHub MCP (e.g., `repos,issues,pull_requests,actions`). Use `all` for all toolsets or `default` for the default set | `""`                                 |
 
 ## Outputs
 
