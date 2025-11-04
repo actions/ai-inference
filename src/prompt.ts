@@ -7,9 +7,16 @@ export interface PromptMessage {
   content: string
 }
 
+export interface ModelParameters {
+  maxTokens?: number
+  temperature?: number
+  topP?: number
+}
+
 export interface PromptConfig {
   messages: PromptMessage[]
   model?: string
+  modelParameters?: ModelParameters
   responseFormat?: 'text' | 'json_schema'
   jsonSchema?: string
 }

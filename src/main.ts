@@ -53,7 +53,11 @@ export async function run(): Promise<void> {
 
     // Get common parameters
     const modelName = promptConfig?.model || core.getInput('model')
-    const maxTokens = parseInt(core.getInput('max-tokens'), 10)
+    let maxTokens = promptConfig?.modelParameters?.maxTokens || core.getInput('max-tokens')
+
+    if (typeof maxTokens === 'string') {
+      maxTokens = parseInt(maxTokens, 10)
+    }
 
     const token = process.env['GITHUB_TOKEN'] || core.getInput('token')
     if (token === undefined) {
@@ -71,6 +75,8 @@ export async function run(): Promise<void> {
       systemPrompt,
       prompt,
       modelName,
+      promptConfig?.modelParameters?.temperature,
+      promptConfig?.modelParameters?.topP,
       maxTokens,
       endpoint,
       token,
