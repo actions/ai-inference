@@ -52572,10 +52572,8 @@ function loadPromptFile(filePath, templateVariables = {}) {
         throw new Error(`Prompt file not found: ${filePath}`);
     }
     const fileContent = fs.readFileSync(filePath, 'utf-8');
-    // Apply template variable substitution
-    const processedContent = replaceTemplateVariables(fileContent, templateVariables);
     try {
-        const config = load(processedContent);
+        const config = load(fileContent);
         if (!config.messages || !Array.isArray(config.messages)) {
             throw new Error('Prompt file must contain a "messages" array');
         }
@@ -52588,6 +52586,13 @@ function loadPromptFile(filePath, templateVariables = {}) {
                 throw new Error(`Invalid message role: ${message.role}`);
             }
         }
+        // Prepare messages by replacing template variables with actual content
+        config.messages = config.messages.map(msg => {
+            return {
+                ...msg,
+                content: replaceTemplateVariables(msg.content, templateVariables),
+            };
+        });
         return config;
     }
     catch (error) {
