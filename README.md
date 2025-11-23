@@ -212,7 +212,7 @@ the action:
 | `endpoint`           | The endpoint to use for inference. If you're running this as part of an org, you should probably use the org-specific Models endpoint                         | `https://models.github.ai/inference` |
 | `max-tokens`         | The max number of tokens to generate                                                                                                                          | 200                                  |
 | `enable-github-mcp`  | Enable Model Context Protocol integration with GitHub tools                                                                                                   | `false`                              |
-| `github-mcp-token`   | Token to use for GitHub MCP server (defaults to the main token if not specified). This must be a PAT for MCP to work                                          | `""`                                 |
+| `github-mcp-token`   | Token to use for GitHub MCP server (defaults to the main token if not specified). This must be a PAT in order for MCP to work                                 | `""`                                 |
 
 ## Outputs
 
