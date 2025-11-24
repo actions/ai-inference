@@ -7,9 +7,16 @@ export interface PromptMessage {
   content: string
 }
 
+export interface ModelParameters {
+  maxTokens?: number
+  temperature?: number
+  topP?: number
+}
+
 export interface PromptConfig {
   messages: PromptMessage[]
   model?: string
+  modelParameters?: ModelParameters
   responseFormat?: 'text' | 'json_schema'
   jsonSchema?: string
 }
@@ -101,11 +108,8 @@ export function loadPromptFile(filePath: string, templateVariables: TemplateVari
 
   const fileContent = fs.readFileSync(filePath, 'utf-8')
 
-  // Apply template variable substitution
-  const processedContent = replaceTemplateVariables(fileContent, templateVariables)
-
   try {
-    const config = yaml.load(processedContent) as PromptConfig
+    const config = yaml.load(fileContent) as PromptConfig
 
     if (!config.messages || !Array.isArray(config.messages)) {
       throw new Error('Prompt file must contain a "messages" array')
@@ -120,6 +124,14 @@ export function loadPromptFile(filePath: string, templateVariables: TemplateVari
         throw new Error(`Invalid message role: ${message.role}`)
       }
     }
+
+    // Prepare messages by replacing template variables with actual content
+    config.messages = config.messages.map(msg => {
+      return {
+        ...msg,
+        content: replaceTemplateVariables(msg.content, templateVariables),
+      }
+    })
 
     return config
   } catch (error) {
