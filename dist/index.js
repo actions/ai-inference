@@ -52646,7 +52646,7 @@ async function run() {
         }
         // Get common parameters
         const modelName = promptConfig?.model || coreExports.getInput('model');
-        let maxTokens = promptConfig?.modelParameters?.maxTokens || coreExports.getInput('max-tokens');
+        let maxTokens = promptConfig?.modelParameters?.maxTokens ?? coreExports.getInput('max-tokens');
         if (typeof maxTokens === 'string') {
             maxTokens = parseInt(maxTokens, 10);
         }
