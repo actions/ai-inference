@@ -82,6 +82,8 @@ export function buildInferenceRequest(
   systemPrompt: string | undefined,
   prompt: string | undefined,
   modelName: string,
+  temperature: number | undefined,
+  topP: number | undefined,
   maxTokens: number,
   endpoint: string,
   token: string,
@@ -92,6 +94,8 @@ export function buildInferenceRequest(
   return {
     messages,
     modelName,
+    temperature,
+    topP,
     maxTokens,
     endpoint,
     token,
