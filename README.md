@@ -162,14 +162,14 @@ This action now supports **read-only** integration with the GitHub-hosted Model
 Context Protocol (MCP) server, which provides access to GitHub tools like
 repository management, issue tracking, and pull request operations.
 
-### Authentication
+#### Authentication
 You can authenticate the MCP server with **either**:
 1. **Personal Access Token (PAT)** – user-scoped token
 2. **GitHub App Installation Token** (`ghs_…`) – short-lived, app-scoped token
 > The built-in `GITHUB_TOKEN` is **not** accepted by the MCP server.
 Using a **GitHub App installation token** is recommended in most CI environments because it is short-lived and least-privilege by design.
 
- ### Enabling MCP in the action
+#### Enabling MCP in the action
 Set `enable-github-mcp: true` and provide a token via `github-mcp-token`.
  
 ```yaml
