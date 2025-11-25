@@ -49496,6 +49496,8 @@ async function simpleInference(request) {
         messages: request.messages,
         max_tokens: request.maxTokens,
         model: request.modelName,
+        temperature: request.temperature,
+        top_p: request.topP,
     };
     // Add response format if specified
     if (request.responseFormat) {
@@ -49530,6 +49532,8 @@ async function mcpInference(request, githubMcpClient) {
             messages: messages,
             max_tokens: request.maxTokens,
             model: request.modelName,
+            temperature: request.temperature,
+            top_p: request.topP,
         };
         // Add response format if specified (only on final iteration to avoid conflicts with tool calls)
         if (finalMessage && request.responseFormat) {
@@ -49685,12 +49689,14 @@ function buildResponseFormat(promptConfig) {
 /**
  * Build complete InferenceRequest from prompt config and inputs
  */
-function buildInferenceRequest(promptConfig, systemPrompt, prompt, modelName, maxTokens, endpoint, token) {
+function buildInferenceRequest(promptConfig, systemPrompt, prompt, modelName, temperature, topP, maxTokens, endpoint, token) {
     const messages = buildMessages(promptConfig, systemPrompt, prompt);
     const responseFormat = buildResponseFormat(promptConfig);
     return {
         messages,
         modelName,
+        temperature,
+        topP,
         maxTokens,
         endpoint,
         token,
@@ -52572,10 +52578,8 @@ function loadPromptFile(filePath, templateVariables = {}) {
         throw new Error(`Prompt file not found: ${filePath}`);
     }
     const fileContent = fs.readFileSync(filePath, 'utf-8');
-    // Apply template variable substitution
-    const processedContent = replaceTemplateVariables(fileContent, templateVariables);
     try {
-        const config = load(processedContent);
+        const config = load(fileContent);
         if (!config.messages || !Array.isArray(config.messages)) {
             throw new Error('Prompt file must contain a "messages" array');
         }
@@ -52588,6 +52592,13 @@ function loadPromptFile(filePath, templateVariables = {}) {
                 throw new Error(`Invalid message role: ${message.role}`);
             }
         }
+        // Prepare messages by replacing template variables with actual content
+        config.messages = config.messages.map(msg => {
+            return {
+                ...msg,
+                content: replaceTemplateVariables(msg.content, templateVariables),
+            };
+        });
         return config;
     }
     catch (error) {
@@ -52635,7 +52646,10 @@ async function run() {
         }
         // Get common parameters
         const modelName = promptConfig?.model || coreExports.getInput('model');
-        const maxTokens = parseInt(coreExports.getInput('max-tokens'), 10);
+        let maxTokens = promptConfig?.modelParameters?.maxTokens ?? coreExports.getInput('max-tokens');
+        if (typeof maxTokens === 'string') {
+            maxTokens = parseInt(maxTokens, 10);
+        }
         const token = process.env['GITHUB_TOKEN'] || coreExports.getInput('token');
         if (token === undefined) {
             throw new Error('GITHUB_TOKEN is not set');
@@ -52644,7 +52658,7 @@ async function run() {
         const githubMcpToken = coreExports.getInput('github-mcp-token') || token;
         const endpoint = coreExports.getInput('endpoint');
         // Build the inference request with pre-processed messages and response format
-        const inferenceRequest = buildInferenceRequest(promptConfig, systemPrompt, prompt, modelName, maxTokens, endpoint, token);
+        const inferenceRequest = buildInferenceRequest(promptConfig, systemPrompt, prompt, modelName, promptConfig?.modelParameters?.temperature, promptConfig?.modelParameters?.topP, maxTokens, endpoint, token);
         const enableMcp = coreExports.getBooleanInput('enable-github-mcp') || false;
         let modelResponse = null;
         if (enableMcp) {
