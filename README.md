@@ -208,7 +208,7 @@ steps:
 ```
 
 **Available toolsets:**
-See: https://github.com/github/github-mcp-server/blob/main/README.md#tool-configuration
+See: [Tool configuration](https://github.com/github/github-mcp-server/blob/main/README.md#tool-configuration)
 
 When MCP is enabled, the AI model will have access to GitHub tools and can
 perform actions like searching issues and PRs.
