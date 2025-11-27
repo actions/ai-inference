@@ -52618,9 +52618,6 @@ function isPromptYamlFile(filePath) {
  * @returns Resolves when the action is complete.
  */
 async function run() {
-    let responseFile = null;
-    // Set up graceful cleanup for temporary files on process exit
-    tmpExports.setGracefulCleanup();
     try {
         const promptFilePath = coreExports.getInput('prompt-file');
         const inputVariables = coreExports.getInput('input');
@@ -52675,10 +52672,13 @@ async function run() {
             modelResponse = await simpleInference(inferenceRequest);
         }
         coreExports.setOutput('response', modelResponse || '');
-        // Create a secure temporary file instead of using the temp directory directly
-        responseFile = tmpExports.fileSync({
+        // Create a temporary file for the response that persists for downstream steps.
+        // We use keep: true to prevent automatic cleanup - the file will be cleaned up
+        // by the runner when the job completes.
+        const responseFile = tmpExports.fileSync({
             prefix: 'modelResponse-',
             postfix: '.txt',
+            keep: true,
         });
         coreExports.setOutput('response-file', responseFile.name);
         if (modelResponse && modelResponse !== '') {
@@ -52694,18 +52694,6 @@ async function run() {
         }
         // Force exit to prevent hanging on open connections
         process.exit(1);
-    }
-    finally {
-        // Explicit cleanup of temporary file if it was created
-        if (responseFile) {
-            try {
-                responseFile.removeCallback();
-            }
-            catch (cleanupError) {
-                // Log cleanup errors but don't fail the action
-                coreExports.warning(`Failed to cleanup temporary file: ${cleanupError}`);
-            }
-        }
     }
     // Force exit to prevent hanging on open connections
     process.exit(0);
