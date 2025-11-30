@@ -56,19 +56,50 @@ jobs:
         id: checkout
         uses: actions/checkout@v6
 
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .node-version
+
+      - name: Start Mock Inference Server
+        id: mock-server
+        run: |
+          node script/mock-inference-server.mjs &
+          echo "pid=$!" >> $GITHUB_OUTPUT
+          # Wait for server to be ready
+          for i in {1..10}; do
+            if curl -s http://localhost:3456/health > /dev/null; then
+              echo "Mock server is ready"
+              break
+            fi
+            sleep 1
+          done
+
       - name: Test Local Action
         id: test-action
-        continue-on-error: true
         uses: ./
         with:
           prompt: hello
+          endpoint: http://localhost:3456
         env:
           GITHUB_TOKEN: ${{ github.token }}
 
       - name: Print Output
         id: output
-        continue-on-error: true
         run: echo "${{ steps.test-action.outputs.response }}"
+
+      - name: Verify Output
+        run: |
+          response="${{ steps.test-action.outputs.response }}"
+          if [[ -z "$response" ]]; then
+            echo "Error: No response received"
+            exit 1
+          fi
+          echo "Response received: $response"
+
+      - name: Stop Mock Server
+        if: always()
+        run: kill ${{ steps.mock-server.outputs.pid }} || true
 
   test-action-prompt-file:
     name: GitHub Actions Test with Prompt File
@@ -79,6 +110,25 @@ jobs:
         id: checkout
         uses: actions/checkout@v6
 
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .node-version
+
+      - name: Start Mock Inference Server
+        id: mock-server
+        run: |
+          node script/mock-inference-server.mjs &
+          echo "pid=$!" >> $GITHUB_OUTPUT
+          # Wait for server to be ready
+          for i in {1..10}; do
+            if curl -s http://localhost:3456/health > /dev/null; then
+              echo "Mock server is ready"
+              break
+            fi
+            sleep 1
+          done
+
       - name: Create Prompt File
         run: echo "hello" > prompt.txt
 
@@ -87,16 +137,33 @@ jobs:
 
       - name: Test Local Action with Prompt File
         id: test-action-prompt-file
-        continue-on-error: true
         uses: ./
         with:
           prompt-file: prompt.txt
           system-prompt-file: system-prompt.txt
+          endpoint: http://localhost:3456
         env:
           GITHUB_TOKEN: ${{ github.token }}
 
       - name: Print Output
-        continue-on-error: true
         run: |
           echo "Response saved to: ${{ steps.test-action-prompt-file.outputs.response-file }}"
           cat "${{ steps.test-action-prompt-file.outputs.response-file }}"
+
+      - name: Verify Output
+        run: |
+          response_file="${{ steps.test-action-prompt-file.outputs.response-file }}"
+          if [[ ! -f "$response_file" ]]; then
+            echo "Error: Response file not found"
+            exit 1
+          fi
+          content=$(cat "$response_file")
+          if [[ -z "$content" ]]; then
+            echo "Error: Response file is empty"
+            exit 1
+          fi
+          echo "Response file content: $content"
+
+      - name: Stop Mock Server
+        if: always()
+        run: kill ${{ steps.mock-server.outputs.pid }} || true

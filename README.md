@@ -24,7 +24,7 @@ jobs:
     steps:
       - name: Test Local Action
         id: inference
-        uses: actions/ai-inference@v2
+        uses: actions/ai-inference@v1
         with:
           prompt: 'Hello!'
 
@@ -42,7 +42,7 @@ supports both plain text files and structured `.prompt.yml` files:
 steps:
   - name: Run AI Inference with Text File
     id: inference
-    uses: actions/ai-inference@v2
+    uses: actions/ai-inference@v1
     with:
       prompt-file: './path/to/prompt.txt'
 ```
@@ -56,7 +56,7 @@ support templating, custom models, and JSON schema responses:
 steps:
   - name: Run AI Inference with Prompt YAML
     id: inference
-    uses: actions/ai-inference@v2
+    uses: actions/ai-inference@v1
     with:
       prompt-file: './.github/prompts/sample.prompt.yml'
       input: |
@@ -132,7 +132,7 @@ of an inline system prompt:
 steps:
   - name: Run AI Inference with System Prompt File
     id: inference
-    uses: actions/ai-inference@v2
+    uses: actions/ai-inference@v1
     with:
       prompt: 'Hello!'
       system-prompt-file: './path/to/system-prompt.txt'
@@ -146,7 +146,7 @@ This can be useful when model response exceeds actions output limit
 steps:
   - name: Test Local Action
     id: inference
-    uses: actions/ai-inference@v2
+    uses: actions/ai-inference@v1
     with:
       prompt: 'Hello!'
 
@@ -162,18 +162,28 @@ This action now supports **read-only** integration with the GitHub-hosted Model
 Context Protocol (MCP) server, which provides access to GitHub tools like
 repository management, issue tracking, and pull request operations.
 
-> [!NOTE]
-> The GitHub MCP integration requires a Personal Access Token (PAT) and cannot use the built-in `GITHUB_TOKEN`.
+#### Authentication
+
+You can authenticate the MCP server with **either**:
+
+1. **Personal Access Token (PAT)** – user-scoped token
+2. **GitHub App Installation Token** (`ghs_…`) – short-lived, app-scoped token
+   > The built-in `GITHUB_TOKEN` is **not** accepted by the MCP server.
+   > Using a **GitHub App installation token** is recommended in most CI environments because it is short-lived and least-privilege by design.
+
+#### Enabling MCP in the action
+
+Set `enable-github-mcp: true` and provide a token via `github-mcp-token`.
 
 ```yaml
 steps:
   - name: AI Inference with GitHub Tools
     id: inference
-    uses: actions/ai-inference@v2
+    uses: actions/ai-inference@v1.2
     with:
       prompt: 'List my open pull requests and create a summary'
       enable-github-mcp: true
-      token: ${{ secrets.USER_PAT }}
+      token: ${{ secrets.USER_PAT }} # or a ghs_ installation token
 ```
 
 If you want, you can use separate tokens for the AI inference endpoint
@@ -183,12 +193,12 @@ and the GitHub MCP server:
 steps:
   - name: AI Inference with Separate MCP Token
     id: inference
-    uses: actions/ai-inference@v2
+    uses: actions/ai-inference@v1.2
     with:
       prompt: 'List my open pull requests and create a summary'
       enable-github-mcp: true
       token: ${{ secrets.GITHUB_TOKEN }}
-      github-mcp-token: ${{ secrets.USER_PAT }}
+      github-mcp-token: ${{ secrets.USER_PAT }} # or a ghs_ installation token
 ```
 
 #### Configuring GitHub MCP Toolsets
@@ -218,21 +228,20 @@ perform actions like searching issues and PRs.
 Various inputs are defined in [`action.yml`](action.yml) to let you configure
 the action:
 
-| Name                  | Description                                                                                                                                                         | Default                              |
-| --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------ |
-| `token`               | Token to use for inference. Typically the GITHUB_TOKEN secret                                                                                                       | `github.token`                       |
-| `prompt`              | The prompt to send to the model                                                                                                                                     | N/A                                  |
-| `prompt-file`         | Path to a file containing the prompt (supports .txt and .prompt.yml formats). If both `prompt` and `prompt-file` are provided, `prompt-file` takes precedence       | `""`                                 |
-| `input`               | Template variables in YAML format for .prompt.yml files (e.g., `var1: value1` on separate lines)                                                                    | `""`                                 |
-| `file_input`          | Template variables in YAML where values are file paths. The file contents are read and used for templating                                                          | `""`                                 |
-| `system-prompt`       | The system prompt to send to the model                                                                                                                              | `"You are a helpful assistant"`      |
-| `system-prompt-file`  | Path to a file containing the system prompt. If both `system-prompt` and `system-prompt-file` are provided, `system-prompt-file` takes precedence                   | `""`                                 |
-| `model`               | The model to use for inference. Must be available in the [GitHub Models](https://github.com/marketplace?type=models) catalog                                        | `openai/gpt-4o`                      |
-| `endpoint`            | The endpoint to use for inference. If you're running this as part of an org, you should probably use the org-specific Models endpoint                               | `https://models.github.ai/inference` |
-| `max-tokens`          | The max number of tokens to generate                                                                                                                                | 200                                  |
-| `enable-github-mcp`   | Enable Model Context Protocol integration with GitHub tools                                                                                                         | `false`                              |
-| `github-mcp-token`    | Token to use for GitHub MCP server (defaults to the main token if not specified). This must be a PAT in order for MCP to work                                       | `""`                                 |
-| `github-mcp-toolsets` | Comma-separated list of toolsets to enable for GitHub MCP (e.g., `repos,issues,pull_requests,actions`). Use `all` for all toolsets or `default` for the default set | `""`                                 |
+| Name                 | Description                                                                                                                                                   | Default                              |
+| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------ |
+| `token`              | Token to use for inference. Typically the GITHUB_TOKEN secret                                                                                                 | `github.token`                       |
+| `prompt`             | The prompt to send to the model                                                                                                                               | N/A                                  |
+| `prompt-file`        | Path to a file containing the prompt (supports .txt and .prompt.yml formats). If both `prompt` and `prompt-file` are provided, `prompt-file` takes precedence | `""`                                 |
+| `input`              | Template variables in YAML format for .prompt.yml files (e.g., `var1: value1` on separate lines)                                                              | `""`                                 |
+| `file_input`         | Template variables in YAML where values are file paths. The file contents are read and used for templating                                                    | `""`                                 |
+| `system-prompt`      | The system prompt to send to the model                                                                                                                        | `"You are a helpful assistant"`      |
+| `system-prompt-file` | Path to a file containing the system prompt. If both `system-prompt` and `system-prompt-file` are provided, `system-prompt-file` takes precedence             | `""`                                 |
+| `model`              | The model to use for inference. Must be available in the [GitHub Models](https://github.com/marketplace?type=models) catalog                                  | `openai/gpt-4o`                      |
+| `endpoint`           | The endpoint to use for inference. If you're running this as part of an org, you should probably use the org-specific Models endpoint                         | `https://models.github.ai/inference` |
+| `max-tokens`         | The max number of tokens to generate                                                                                                                          | 200                                  |
+| `enable-github-mcp`  | Enable Model Context Protocol integration with GitHub tools                                                                                                   | `false`                              |
+| `github-mcp-token`   | Token to use for GitHub MCP server (defaults to the main token if not specified).                                                                             | `""`                                 |
 
 ## Outputs
 
