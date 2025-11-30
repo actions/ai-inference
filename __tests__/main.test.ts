@@ -195,7 +195,7 @@ describe('main.ts', () => {
 
     await run()
 
-    expect(mockConnectToGitHubMCP).toHaveBeenCalledWith('fake-token')
+    expect(mockConnectToGitHubMCP).toHaveBeenCalledWith('fake-token', '')
     expect(mockMcpInference).toHaveBeenCalledWith(
       expect.objectContaining({
         messages: [
@@ -222,7 +222,7 @@ describe('main.ts', () => {
 
     await run()
 
-    expect(mockConnectToGitHubMCP).toHaveBeenCalledWith('fake-token')
+    expect(mockConnectToGitHubMCP).toHaveBeenCalledWith('fake-token', '')
     expect(mockSimpleInference).toHaveBeenCalled()
     expect(mockMcpInference).not.toHaveBeenCalled()
     expect(core.warning).toHaveBeenCalledWith('MCP connection failed, falling back to simple inference')

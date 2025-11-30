@@ -58,6 +58,10 @@ inputs:
     description: The token to use for GitHub MCP server (defaults to the main token if not specified). This must be a PAT for MCP to work.
     required: false
     default: ''
+  github-mcp-toolsets:
+    description: 'Comma-separated list of toolsets to enable for GitHub MCP (e.g., "repos,issues,pull_requests,actions"). Use "all" for all toolsets, "default" for default set. If not specified, uses default toolsets (context,repos,issues,pull_requests,users).'
+    required: false
+    default: ''
 
 # Define your outputs here.
 outputs:

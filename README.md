@@ -201,6 +201,25 @@ steps:
       github-mcp-token: ${{ secrets.USER_PAT }} # or a ghs_ installation token
 ```
 
+#### Configuring GitHub MCP Toolsets
+
+By default, the GitHub MCP server provides a standard set of tools (`context`, `repos`, `issues`, `pull_requests`, `users`). You can customize which toolsets are available by specifying the `github-mcp-toolsets` parameter:
+
+```yaml
+steps:
+  - name: AI Inference with Custom Toolsets
+    id: inference
+    uses: actions/ai-inference@v2
+    with:
+      prompt: 'Analyze recent workflow runs and check security alerts'
+      enable-github-mcp: true
+      token: ${{ secrets.USER_PAT }}
+      github-mcp-toolsets: 'repos,issues,pull_requests,actions,code_security'
+```
+
+**Available toolsets:**
+See: [Tool configuration](https://github.com/github/github-mcp-server/blob/main/README.md#tool-configuration)
+
 When MCP is enabled, the AI model will have access to GitHub tools and can
 perform actions like searching issues and PRs.
 
