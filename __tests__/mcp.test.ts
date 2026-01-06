@@ -113,6 +113,40 @@ describe('mcp.ts', () => {
       expect(result?.tools).toHaveLength(0)
       expect(core.info).toHaveBeenCalledWith('Retrieved 0 tools from GitHub MCP server')
     })
+
+    it('uses default toolsets when toolsets parameter is not provided', async () => {
+      const token = 'test-token'
+
+      mockConnect.mockResolvedValue(undefined)
+      mockListTools.mockResolvedValue({tools: []})
+
+      await connectToGitHubMCP(token)
+
+      expect(core.info).toHaveBeenCalledWith('Using default GitHub MCP toolsets')
+    })
+
+    it('uses custom toolsets when toolsets parameter is provided', async () => {
+      const token = 'test-token'
+      const toolsets = 'repos,issues,pull_requests,actions'
+
+      mockConnect.mockResolvedValue(undefined)
+      mockListTools.mockResolvedValue({tools: []})
+
+      await connectToGitHubMCP(token, toolsets)
+
+      expect(core.info).toHaveBeenCalledWith('Using GitHub MCP toolsets: repos,issues,pull_requests,actions')
+    })
+
+    it('ignores empty toolsets parameter', async () => {
+      const token = 'test-token'
+
+      mockConnect.mockResolvedValue(undefined)
+      mockListTools.mockResolvedValue({tools: []})
+
+      await connectToGitHubMCP(token, '   ')
+
+      expect(core.info).toHaveBeenCalledWith('Using default GitHub MCP toolsets')
+    })
   })
 
   describe('executeToolCall', () => {

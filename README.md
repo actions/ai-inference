@@ -162,8 +162,18 @@ This action now supports **read-only** integration with the GitHub-hosted Model
 Context Protocol (MCP) server, which provides access to GitHub tools like
 repository management, issue tracking, and pull request operations.
 
-> [!NOTE]
-> The GitHub MCP integration requires a Personal Access Token (PAT) and cannot use the built-in `GITHUB_TOKEN`.
+#### Authentication
+
+You can authenticate the MCP server with **either**:
+
+1. **Personal Access Token (PAT)** – user-scoped token
+2. **GitHub App Installation Token** (`ghs_…`) – short-lived, app-scoped token
+   > The built-in `GITHUB_TOKEN` is **not** accepted by the MCP server.
+   > Using a **GitHub App installation token** is recommended in most CI environments because it is short-lived and least-privilege by design.
+
+#### Enabling MCP in the action
+
+Set `enable-github-mcp: true` and provide a token via `github-mcp-token`.
 
 ```yaml
 steps:
@@ -173,7 +183,7 @@ steps:
     with:
       prompt: 'List my open pull requests and create a summary'
       enable-github-mcp: true
-      token: ${{ secrets.USER_PAT }}
+      token: ${{ secrets.USER_PAT }} # or a ghs_ installation token
 ```
 
 If you want, you can use separate tokens for the AI inference endpoint
@@ -188,8 +198,27 @@ steps:
       prompt: 'List my open pull requests and create a summary'
       enable-github-mcp: true
       token: ${{ secrets.GITHUB_TOKEN }}
-      github-mcp-token: ${{ secrets.USER_PAT }}
+      github-mcp-token: ${{ secrets.USER_PAT }} # or a ghs_ installation token
 ```
+
+#### Configuring GitHub MCP Toolsets
+
+By default, the GitHub MCP server provides a standard set of tools (`context`, `repos`, `issues`, `pull_requests`, `users`). You can customize which toolsets are available by specifying the `github-mcp-toolsets` parameter:
+
+```yaml
+steps:
+  - name: AI Inference with Custom Toolsets
+    id: inference
+    uses: actions/ai-inference@v2
+    with:
+      prompt: 'Analyze recent workflow runs and check security alerts'
+      enable-github-mcp: true
+      token: ${{ secrets.USER_PAT }}
+      github-mcp-toolsets: 'repos,issues,pull_requests,actions,code_security'
+```
+
+**Available toolsets:**
+See: [Tool configuration](https://github.com/github/github-mcp-server/blob/main/README.md#tool-configuration)
 
 When MCP is enabled, the AI model will have access to GitHub tools and can
 perform actions like searching issues and PRs.
@@ -212,7 +241,7 @@ the action:
 | `endpoint`           | The endpoint to use for inference. If you're running this as part of an org, you should probably use the org-specific Models endpoint                         | `https://models.github.ai/inference` |
 | `max-tokens`         | The max number of tokens to generate                                                                                                                          | 200                                  |
 | `enable-github-mcp`  | Enable Model Context Protocol integration with GitHub tools                                                                                                   | `false`                              |
-| `github-mcp-token`   | Token to use for GitHub MCP server (defaults to the main token if not specified). This must be a PAT for MCP to work                                          | `""`                                 |
+| `github-mcp-token`   | Token to use for GitHub MCP server (defaults to the main token if not specified).                                                                             | `""`                                 |
 
 ## Outputs
 

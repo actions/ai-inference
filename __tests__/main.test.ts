@@ -75,17 +75,13 @@ vi.mock('fs', () => ({
   writeFileSync: mockWriteFileSync,
 }))
 
-// Mocks for tmp module to control temporary file creation and cleanup
-const mockRemoveCallback = vi.fn()
+// Mocks for tmp module to control temporary file creation
 const mockFileSync = vi.fn().mockReturnValue({
   name: '/secure/temp/dir/modelResponse-abc123.txt',
-  removeCallback: mockRemoveCallback,
 })
-const mockSetGracefulCleanup = vi.fn()
 
 vi.mock('tmp', () => ({
   fileSync: mockFileSync,
-  setGracefulCleanup: mockSetGracefulCleanup,
 }))
 
 // Mock MCP and inference modules
@@ -199,7 +195,7 @@ describe('main.ts', () => {
 
     await run()
 
-    expect(mockConnectToGitHubMCP).toHaveBeenCalledWith('fake-token')
+    expect(mockConnectToGitHubMCP).toHaveBeenCalledWith('fake-token', '')
     expect(mockMcpInference).toHaveBeenCalledWith(
       expect.objectContaining({
         messages: [
@@ -226,7 +222,7 @@ describe('main.ts', () => {
 
     await run()
 
-    expect(mockConnectToGitHubMCP).toHaveBeenCalledWith('fake-token')
+    expect(mockConnectToGitHubMCP).toHaveBeenCalledWith('fake-token', '')
     expect(mockSimpleInference).toHaveBeenCalled()
     expect(mockMcpInference).not.toHaveBeenCalled()
     expect(core.warning).toHaveBeenCalledWith('MCP connection failed, falling back to simple inference')
@@ -283,7 +279,7 @@ describe('main.ts', () => {
     expect(mockProcessExit).toHaveBeenCalledWith(1)
   })
 
-  it('creates secure temporary files with proper cleanup', async () => {
+  it('creates temporary files that persist for downstream steps', async () => {
     mockInputs({
       prompt: 'Test prompt',
       'system-prompt': 'You are a test assistant.',
@@ -291,34 +287,16 @@ describe('main.ts', () => {
 
     await run()
 
-    expect(mockSetGracefulCleanup).toHaveBeenCalledOnce()
-
+    // Verify temp file is created with keep: true so it persists
     expect(mockFileSync).toHaveBeenCalledWith({
       prefix: 'modelResponse-',
       postfix: '.txt',
+      keep: true,
     })
 
     expect(core.setOutput).toHaveBeenNthCalledWith(2, 'response-file', '/secure/temp/dir/modelResponse-abc123.txt')
     expect(mockWriteFileSync).toHaveBeenCalledWith('/secure/temp/dir/modelResponse-abc123.txt', 'Hello, user!', 'utf-8')
-    expect(mockRemoveCallback).toHaveBeenCalledOnce()
 
-    expect(mockProcessExit).toHaveBeenCalledWith(0)
-  })
-
-  it('handles cleanup errors gracefully', async () => {
-    mockRemoveCallback.mockImplementationOnce(() => {
-      throw new Error('Cleanup failed')
-    })
-
-    mockInputs({
-      prompt: 'Test prompt',
-      'system-prompt': 'You are a test assistant.',
-    })
-
-    await run()
-
-    expect(mockRemoveCallback).toHaveBeenCalledOnce()
-    expect(core.warning).toHaveBeenCalledWith('Failed to cleanup temporary file: Error: Cleanup failed')
     expect(mockProcessExit).toHaveBeenCalledWith(0)
   })
 })
