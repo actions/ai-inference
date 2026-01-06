@@ -1,9 +1,9 @@
 ---
 name: iconv-lite
-version: 0.6.3
+version: 0.7.0
 type: npm
 summary: Convert character encodings in pure javascript.
-homepage: https://github.com/ashtuchkin/iconv-lite
+homepage: https://github.com/pillarjs/iconv-lite
 license: mit
 licenses:
 - sources: LICENSE
