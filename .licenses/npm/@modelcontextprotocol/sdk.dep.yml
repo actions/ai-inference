@@ -1,6 +1,6 @@
 ---
 name: "@modelcontextprotocol/sdk"
-version: 1.15.1
+version: 1.24.0
 type: npm
 summary: Model Context Protocol implementation for TypeScript
 homepage: https://modelcontextprotocol.io
