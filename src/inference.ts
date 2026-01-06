@@ -15,6 +15,8 @@ export interface InferenceRequest {
   maxTokens: number
   endpoint: string
   token: string
+  temperature?: number
+  topP?: number
   responseFormat?: {type: 'json_schema'; json_schema: unknown} // Processed response format for the API
 }
 
@@ -45,6 +47,8 @@ export async function simpleInference(request: InferenceRequest): Promise<string
     messages: request.messages as OpenAI.Chat.Completions.ChatCompletionMessageParam[],
     max_tokens: request.maxTokens,
     model: request.modelName,
+    temperature: request.temperature,
+    top_p: request.topP,
   }
 
   // Add response format if specified
@@ -90,6 +94,8 @@ export async function mcpInference(
       messages: messages as OpenAI.Chat.Completions.ChatCompletionMessageParam[],
       max_tokens: request.maxTokens,
       model: request.modelName,
+      temperature: request.temperature,
+      top_p: request.topP,
     }
 
     // Add response format if specified (only on final iteration to avoid conflicts with tool calls)

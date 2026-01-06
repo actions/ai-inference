@@ -42717,15 +42717,24 @@ class StreamableHTTPClientTransport {
 /**
  * Connect to the GitHub MCP server and retrieve available tools
  */
-async function connectToGitHubMCP(token) {
+async function connectToGitHubMCP(token, toolsets) {
     const githubMcpUrl = 'https://api.githubcopilot.com/mcp/';
     coreExports.info('Connecting to GitHub MCP server...');
+    const headers = {
+        Authorization: `Bearer ${token}`,
+        'X-MCP-Readonly': 'true',
+    };
+    // Add toolsets header if specified
+    if (toolsets && toolsets.trim() !== '') {
+        headers['X-MCP-Toolsets'] = toolsets;
+        coreExports.info(`Using GitHub MCP toolsets: ${toolsets}`);
+    }
+    else {
+        coreExports.info('Using default GitHub MCP toolsets');
+    }
     const transport = new StreamableHTTPClientTransport(new URL(githubMcpUrl), {
         requestInit: {
-            headers: {
-                Authorization: `Bearer ${token}`,
-                'X-MCP-Readonly': 'true',
-            },
+            headers,
         },
     });
     const client = new Client({
@@ -49496,6 +49505,8 @@ async function simpleInference(request) {
         messages: request.messages,
         max_tokens: request.maxTokens,
         model: request.modelName,
+        temperature: request.temperature,
+        top_p: request.topP,
     };
     // Add response format if specified
     if (request.responseFormat) {
@@ -49530,6 +49541,8 @@ async function mcpInference(request, githubMcpClient) {
             messages: messages,
             max_tokens: request.maxTokens,
             model: request.modelName,
+            temperature: request.temperature,
+            top_p: request.topP,
         };
         // Add response format if specified (only on final iteration to avoid conflicts with tool calls)
         if (finalMessage && request.responseFormat) {
@@ -49685,12 +49698,14 @@ function buildResponseFormat(promptConfig) {
 /**
  * Build complete InferenceRequest from prompt config and inputs
  */
-function buildInferenceRequest(promptConfig, systemPrompt, prompt, modelName, maxTokens, endpoint, token) {
+function buildInferenceRequest(promptConfig, systemPrompt, prompt, modelName, temperature, topP, maxTokens, endpoint, token) {
     const messages = buildMessages(promptConfig, systemPrompt, prompt);
     const responseFormat = buildResponseFormat(promptConfig);
     return {
         messages,
         modelName,
+        temperature,
+        topP,
         maxTokens,
         endpoint,
         token,
@@ -52572,10 +52587,8 @@ function loadPromptFile(filePath, templateVariables = {}) {
         throw new Error(`Prompt file not found: ${filePath}`);
     }
     const fileContent = fs.readFileSync(filePath, 'utf-8');
-    // Apply template variable substitution
-    const processedContent = replaceTemplateVariables(fileContent, templateVariables);
     try {
-        const config = load(processedContent);
+        const config = load(fileContent);
         if (!config.messages || !Array.isArray(config.messages)) {
             throw new Error('Prompt file must contain a "messages" array');
         }
@@ -52588,6 +52601,13 @@ function loadPromptFile(filePath, templateVariables = {}) {
                 throw new Error(`Invalid message role: ${message.role}`);
             }
         }
+        // Prepare messages by replacing template variables with actual content
+        config.messages = config.messages.map(msg => {
+            return {
+                ...msg,
+                content: replaceTemplateVariables(msg.content, templateVariables),
+            };
+        });
         return config;
     }
     catch (error) {
@@ -52607,9 +52627,6 @@ function isPromptYamlFile(filePath) {
  * @returns Resolves when the action is complete.
  */
 async function run() {
-    let responseFile = null;
-    // Set up graceful cleanup for temporary files on process exit
-    tmpExports.setGracefulCleanup();
     try {
         const promptFilePath = coreExports.getInput('prompt-file');
         const inputVariables = coreExports.getInput('input');
@@ -52635,20 +52652,24 @@ async function run() {
         }
         // Get common parameters
         const modelName = promptConfig?.model || coreExports.getInput('model');
-        const maxTokens = parseInt(coreExports.getInput('max-tokens'), 10);
+        let maxTokens = promptConfig?.modelParameters?.maxTokens ?? coreExports.getInput('max-tokens');
+        if (typeof maxTokens === 'string') {
+            maxTokens = parseInt(maxTokens, 10);
+        }
         const token = process.env['GITHUB_TOKEN'] || coreExports.getInput('token');
         if (token === undefined) {
             throw new Error('GITHUB_TOKEN is not set');
         }
         // Get GitHub MCP token (use dedicated token if provided, otherwise fall back to main token)
         const githubMcpToken = coreExports.getInput('github-mcp-token') || token;
+        const githubMcpToolsets = coreExports.getInput('github-mcp-toolsets');
         const endpoint = coreExports.getInput('endpoint');
         // Build the inference request with pre-processed messages and response format
-        const inferenceRequest = buildInferenceRequest(promptConfig, systemPrompt, prompt, modelName, maxTokens, endpoint, token);
+        const inferenceRequest = buildInferenceRequest(promptConfig, systemPrompt, prompt, modelName, promptConfig?.modelParameters?.temperature, promptConfig?.modelParameters?.topP, maxTokens, endpoint, token);
         const enableMcp = coreExports.getBooleanInput('enable-github-mcp') || false;
         let modelResponse = null;
         if (enableMcp) {
-            const mcpClient = await connectToGitHubMCP(githubMcpToken);
+            const mcpClient = await connectToGitHubMCP(githubMcpToken, githubMcpToolsets);
             if (mcpClient) {
                 modelResponse = await mcpInference(inferenceRequest, mcpClient);
             }
@@ -52661,10 +52682,13 @@ async function run() {
             modelResponse = await simpleInference(inferenceRequest);
         }
         coreExports.setOutput('response', modelResponse || '');
-        // Create a secure temporary file instead of using the temp directory directly
-        responseFile = tmpExports.fileSync({
+        // Create a temporary file for the response that persists for downstream steps.
+        // We use keep: true to prevent automatic cleanup - the file will be cleaned up
+        // by the runner when the job completes.
+        const responseFile = tmpExports.fileSync({
             prefix: 'modelResponse-',
             postfix: '.txt',
+            keep: true,
         });
         coreExports.setOutput('response-file', responseFile.name);
         if (modelResponse && modelResponse !== '') {
@@ -52680,18 +52704,6 @@ async function run() {
         }
         // Force exit to prevent hanging on open connections
         process.exit(1);
-    }
-    finally {
-        // Explicit cleanup of temporary file if it was created
-        if (responseFile) {
-            try {
-                responseFile.removeCallback();
-            }
-            catch (cleanupError) {
-                // Log cleanup errors but don't fail the action
-                coreExports.warning(`Failed to cleanup temporary file: ${cleanupError}`);
-            }
-        }
     }
     // Force exit to prevent hanging on open connections
     process.exit(0);
