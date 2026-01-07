@@ -1,54 +1,21 @@
-/**
- * Unit tests for the action's main functionality, src/main.ts
- *
- * To mock dependencies in ESM, you can create fixtures that export mock
- * functions and objects. For example, the core module is mocked in this test,
- * so that the actual '@actions/core' module is not imported.
- */
-import { jest } from '@jest/globals'
+import {vi, describe, expect, it, beforeEach, type MockedFunction} from 'vitest'
 import * as core from '../__fixtures__/core.js'
-const mockPost = jest.fn().mockImplementation(() => ({
-  body: {
-    choices: [
-      {
-        message: {
-          content: 'Hello, user!'
-        }
-      }
-    ]
-  }
-}))
-
-jest.unstable_mockModule('@azure-rest/ai-inference', () => ({
-  default: jest.fn(() => ({
-    path: jest.fn(() => ({
-      post: mockPost
-    }))
-  })),
-  isUnexpected: jest.fn(() => false)
-}))
 
 // Default to throwing errors to catch unexpected calls
-const mockExistsSync = jest.fn().mockImplementation(() => {
-  throw new Error(
-    'Unexpected call to existsSync - test should override this implementation'
-  )
+const mockExistsSync = vi.fn().mockImplementation(() => {
+  throw new Error('Unexpected call to existsSync - test should override this implementation')
 })
-const mockReadFileSync = jest.fn().mockImplementation(() => {
-  throw new Error(
-    'Unexpected call to readFileSync - test should override this implementation'
-  )
+const mockReadFileSync = vi.fn().mockImplementation(() => {
+  throw new Error('Unexpected call to readFileSync - test should override this implementation')
 })
+const mockWriteFileSync = vi.fn()
 
 /**
  * Helper function to mock file system operations for one or more files
  * @param fileContents - Object mapping file paths to their contents
  * @param nonExistentFiles - Array of file paths that should be treated as non-existent
  */
-function mockFileContent(
-  fileContents: Record<string, string> = {},
-  nonExistentFiles: string[] = []
-): void {
+function mockFileContent(fileContents: Record<string, string> = {}, nonExistentFiles: string[] = []): void {
   // Mock existsSync to return true for files that exist, false for those that don't
   mockExistsSync.mockImplementation((...args: unknown[]): boolean => {
     const [path] = args as [string]
@@ -75,14 +42,22 @@ function mockFileContent(
 function mockInputs(inputs: Record<string, string> = {}): void {
   // Default values that are applied unless overridden
   const defaultInputs: Record<string, string> = {
-    token: 'fake-token'
+    token: 'fake-token',
+    model: 'gpt-4',
+    'max-tokens': '100',
+    endpoint: 'https://api.test.com',
   }
 
   // Combine defaults with user-provided inputs
-  const allInputs: Record<string, string> = { ...defaultInputs, ...inputs }
+  const allInputs: Record<string, string> = {...defaultInputs, ...inputs}
 
   core.getInput.mockImplementation((name: string) => {
     return allInputs[name] || ''
+  })
+
+  core.getBooleanInput.mockImplementation((name: string) => {
+    const value = allInputs[name]
+    return value === 'true'
   })
 }
 
@@ -91,289 +66,237 @@ function mockInputs(inputs: Record<string, string> = {}): void {
  */
 function verifyStandardResponse(): void {
   expect(core.setOutput).toHaveBeenNthCalledWith(1, 'response', 'Hello, user!')
-  expect(core.setOutput).toHaveBeenNthCalledWith(
-    2,
-    'response-file',
-    expect.stringContaining('modelResponse.txt')
-  )
+  expect(core.setOutput).toHaveBeenNthCalledWith(2, 'response-file', expect.stringContaining('modelResponse-'))
 }
 
-jest.unstable_mockModule('fs', () => ({
+vi.mock('fs', () => ({
   existsSync: mockExistsSync,
-  readFileSync: mockReadFileSync
+  readFileSync: mockReadFileSync,
+  writeFileSync: mockWriteFileSync,
 }))
 
-jest.unstable_mockModule('@actions/core', () => core)
+// Mocks for tmp module to control temporary file creation
+const mockFileSync = vi.fn().mockReturnValue({
+  name: '/secure/temp/dir/modelResponse-abc123.txt',
+})
+
+vi.mock('tmp', () => ({
+  fileSync: mockFileSync,
+}))
+
+// Mock MCP and inference modules
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const mockConnectToGitHubMCP = vi.fn() as MockedFunction<any>
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const mockSimpleInference = vi.fn() as MockedFunction<any>
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const mockMcpInference = vi.fn() as MockedFunction<any>
+
+vi.mock('../src/mcp.js', () => ({
+  connectToGitHubMCP: mockConnectToGitHubMCP,
+}))
+
+vi.mock('../src/inference.js', () => ({
+  simpleInference: mockSimpleInference,
+  mcpInference: mockMcpInference,
+}))
+
+vi.mock('@actions/core', () => core)
+
+// Mock process.exit to prevent it from actually exiting during tests
+const mockProcessExit = vi.spyOn(process, 'exit').mockImplementation(() => {
+  // Prevent actual exit, but don't throw - just return
+  return undefined as never
+})
 
 // The module being tested should be imported dynamically. This ensures that the
 // mocks are used in place of any actual dependencies.
-const { run } = await import('../src/main.js')
+const {run} = await import('../src/main.js')
 
 describe('main.ts', () => {
   // Reset all mocks before each test
   beforeEach(() => {
-    jest.clearAllMocks()
+    vi.clearAllMocks()
+    mockProcessExit.mockClear()
+
+    // Remove any existing GITHUB_TOKEN
+    delete process.env.GITHUB_TOKEN
+
+    // Set up default mock responses
+    mockSimpleInference.mockResolvedValue('Hello, user!')
+    mockMcpInference.mockResolvedValue('Hello, user!')
   })
 
   it('Sets the response output', async () => {
-    // Set the action's inputs as return values from core.getInput().
     mockInputs({
       prompt: 'Hello, AI!',
-      'system-prompt': 'You are a test assistant.'
+      'system-prompt': 'You are a test assistant.',
     })
 
     await run()
 
     expect(core.setOutput).toHaveBeenCalled()
     verifyStandardResponse()
+    expect(mockProcessExit).toHaveBeenCalledWith(0)
   })
 
   it('Sets a failed status when no prompt is set', async () => {
-    // Clear the getInput mock and simulate no prompt or prompt-file input
     mockInputs({
       prompt: '',
-      'prompt-file': ''
+      'prompt-file': '',
     })
 
     await run()
 
-    // Verify that the action was marked as failed.
-    expect(core.setFailed).toHaveBeenNthCalledWith(
-      1,
-      'Neither prompt-file nor prompt was set'
-    )
+    expect(core.setFailed).toHaveBeenCalledWith('Neither prompt-file nor prompt was set')
+    expect(mockProcessExit).toHaveBeenCalledWith(1)
   })
 
-  it('uses prompt-file', async () => {
-    const promptFile = 'prompt.txt'
-    const promptContent = 'This is a prompt from a file'
-
-    // Set up mock to return specific content for the prompt file
-    mockFileContent({
-      [promptFile]: promptContent
-    })
-
-    // Set up input mocks
+  it('uses simple inference when MCP is disabled', async () => {
     mockInputs({
-      'prompt-file': promptFile,
-      'system-prompt': 'You are a test assistant.'
+      prompt: 'Hello, AI!',
+      'system-prompt': 'You are a test assistant.',
+      'enable-github-mcp': 'false',
     })
 
     await run()
 
-    expect(mockExistsSync).toHaveBeenCalledWith(promptFile)
-    expect(mockReadFileSync).toHaveBeenCalledWith(promptFile, 'utf-8')
+    expect(mockSimpleInference).toHaveBeenCalledWith({
+      messages: [
+        {role: 'system', content: 'You are a test assistant.'},
+        {role: 'user', content: 'Hello, AI!'},
+      ],
+      modelName: 'gpt-4',
+      maxTokens: 100,
+      endpoint: 'https://api.test.com',
+      token: 'fake-token',
+      responseFormat: undefined,
+    })
+    expect(mockConnectToGitHubMCP).not.toHaveBeenCalled()
+    expect(mockMcpInference).not.toHaveBeenCalled()
     verifyStandardResponse()
+    expect(mockProcessExit).toHaveBeenCalledWith(0)
+  })
+
+  it('uses MCP inference when enabled and connection succeeds', async () => {
+    const mockMcpClient = {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      client: {} as any,
+      tools: [{type: 'function', function: {name: 'test-tool'}}],
+    }
+
+    mockInputs({
+      prompt: 'Hello, AI!',
+      'system-prompt': 'You are a test assistant.',
+      'enable-github-mcp': 'true',
+    })
+
+    mockConnectToGitHubMCP.mockResolvedValue(mockMcpClient)
+
+    await run()
+
+    expect(mockConnectToGitHubMCP).toHaveBeenCalledWith('fake-token', '')
+    expect(mockMcpInference).toHaveBeenCalledWith(
+      expect.objectContaining({
+        messages: [
+          {role: 'system', content: 'You are a test assistant.'},
+          {role: 'user', content: 'Hello, AI!'},
+        ],
+        token: 'fake-token',
+      }),
+      mockMcpClient,
+    )
+    expect(mockSimpleInference).not.toHaveBeenCalled()
+    verifyStandardResponse()
+    expect(mockProcessExit).toHaveBeenCalledWith(0)
+  })
+
+  it('falls back to simple inference when MCP connection fails', async () => {
+    mockInputs({
+      prompt: 'Hello, AI!',
+      'system-prompt': 'You are a test assistant.',
+      'enable-github-mcp': 'true',
+    })
+
+    mockConnectToGitHubMCP.mockResolvedValue(null)
+
+    await run()
+
+    expect(mockConnectToGitHubMCP).toHaveBeenCalledWith('fake-token', '')
+    expect(mockSimpleInference).toHaveBeenCalled()
+    expect(mockMcpInference).not.toHaveBeenCalled()
+    expect(core.warning).toHaveBeenCalledWith('MCP connection failed, falling back to simple inference')
+    verifyStandardResponse()
+    expect(mockProcessExit).toHaveBeenCalledWith(0)
+  })
+
+  it('properly integrates with loadContentFromFileOrInput', async () => {
+    const promptFile = 'prompt.txt'
+    const systemPromptFile = 'system-prompt.txt'
+    const promptContent = 'File-based prompt'
+    const systemPromptContent = 'File-based system prompt'
+
+    mockFileContent({
+      [promptFile]: promptContent,
+      [systemPromptFile]: systemPromptContent,
+    })
+
+    mockInputs({
+      'prompt-file': promptFile,
+      'system-prompt-file': systemPromptFile,
+      'enable-github-mcp': 'false',
+    })
+
+    await run()
+
+    expect(mockSimpleInference).toHaveBeenCalledWith({
+      messages: [
+        {role: 'system', content: systemPromptContent},
+        {role: 'user', content: promptContent},
+      ],
+      modelName: 'gpt-4',
+      maxTokens: 100,
+      endpoint: 'https://api.test.com',
+      token: 'fake-token',
+      responseFormat: undefined,
+    })
+    verifyStandardResponse()
+    expect(mockProcessExit).toHaveBeenCalledWith(0)
   })
 
   it('handles non-existent prompt-file with an error', async () => {
     const promptFile = 'non-existent-prompt.txt'
 
-    // Mock the file not existing
     mockFileContent({}, [promptFile])
 
-    // Set up input mocks
-    mockInputs({
-      'prompt-file': promptFile
-    })
-
-    await run()
-
-    // Verify that the error was correctly reported
-    expect(core.setFailed).toHaveBeenCalledWith(
-      `File for prompt-file was not found: ${promptFile}`
-    )
-  })
-
-  it('prefers prompt-file over prompt when both are provided', async () => {
-    const promptFile = 'prompt.txt'
-    const promptFileContent = 'This is a prompt from a file that should be used'
-    const promptString = 'This is a direct prompt that should be ignored'
-
-    // Set up mock to return specific content for the prompt file
-    mockFileContent({
-      [promptFile]: promptFileContent
-    })
-
-    // Set up input mocks
-    mockInputs({
-      prompt: promptString,
-      'prompt-file': promptFile,
-      'system-prompt': 'You are a test assistant.'
-    })
-
-    await run()
-
-    expect(mockExistsSync).toHaveBeenCalledWith(promptFile)
-    expect(mockReadFileSync).toHaveBeenCalledWith(promptFile, 'utf-8')
-
-    // Check that the post call was made with the prompt from the file, not the input parameter
-    expect(mockPost).toHaveBeenCalledWith({
-      body: {
-        messages: [
-          {
-            role: 'system',
-            content: expect.any(String)
-          },
-          { role: 'user', content: promptFileContent } // Should use the file content, not the string input
-        ],
-        max_tokens: expect.any(Number),
-        model: expect.any(String)
-      }
-    })
-
-    verifyStandardResponse()
-  })
-
-  it('uses system-prompt-file', async () => {
-    const systemPromptFile = 'system-prompt.txt'
-    const systemPromptContent =
-      'You are a specialized system assistant for testing'
-
-    // Set up mock to return specific content for the system prompt file
-    mockFileContent({
-      [systemPromptFile]: systemPromptContent
-    })
-
-    // Set up input mocks
-    mockInputs({
-      prompt: 'Hello, AI!',
-      'system-prompt-file': systemPromptFile
-    })
-
-    await run()
-
-    expect(mockExistsSync).toHaveBeenCalledWith(systemPromptFile)
-    expect(mockReadFileSync).toHaveBeenCalledWith(systemPromptFile, 'utf-8')
-    verifyStandardResponse()
-  })
-
-  it('handles non-existent system-prompt-file with an error', async () => {
-    const systemPromptFile = 'non-existent-system-prompt.txt'
-
-    // Mock the file not existing
-    mockFileContent({}, [systemPromptFile])
-
-    // Set up input mocks
-    mockInputs({
-      prompt: 'Hello, AI!',
-      'system-prompt-file': systemPromptFile
-    })
-
-    await run()
-
-    // Verify that the error was correctly reported
-    expect(core.setFailed).toHaveBeenCalledWith(
-      `File for system-prompt-file was not found: ${systemPromptFile}`
-    )
-  })
-
-  it('prefers system-prompt-file over system-prompt when both are provided', async () => {
-    const systemPromptFile = 'system-prompt.txt'
-    const systemPromptFileContent =
-      'You are a specialized system assistant from file'
-    const systemPromptString =
-      'You are a basic system assistant from input parameter'
-
-    // Set up mock to return specific content for the system prompt file
-    mockFileContent({
-      [systemPromptFile]: systemPromptFileContent
-    })
-
-    // Set up input mocks
-    mockInputs({
-      prompt: 'Hello, AI!',
-      'system-prompt-file': systemPromptFile,
-      'system-prompt': systemPromptString
-    })
-
-    await run()
-
-    expect(mockExistsSync).toHaveBeenCalledWith(systemPromptFile)
-    expect(mockReadFileSync).toHaveBeenCalledWith(systemPromptFile, 'utf-8')
-
-    // Check that the post call was made with the system prompt from the file, not the input parameter
-    expect(mockPost).toHaveBeenCalledWith({
-      body: {
-        messages: [
-          {
-            role: 'system',
-            content: systemPromptFileContent // Should use the file content, not the string input
-          },
-          { role: 'user', content: 'Hello, AI!' }
-        ],
-        max_tokens: expect.any(Number),
-        model: expect.any(String)
-      }
-    })
-
-    verifyStandardResponse()
-  })
-
-  it('uses both prompt-file and system-prompt-file together', async () => {
-    const promptFile = 'prompt.txt'
-    const promptContent = 'This is a prompt from a file'
-    const systemPromptFile = 'system-prompt.txt'
-    const systemPromptContent =
-      'You are a specialized system assistant from file'
-
-    // Set up mock to return specific content for both files
-    mockFileContent({
-      [promptFile]: promptContent,
-      [systemPromptFile]: systemPromptContent
-    })
-
-    // Set up input mocks
     mockInputs({
       'prompt-file': promptFile,
-      'system-prompt-file': systemPromptFile
     })
 
     await run()
 
-    expect(mockExistsSync).toHaveBeenCalledWith(promptFile)
-    expect(mockExistsSync).toHaveBeenCalledWith(systemPromptFile)
-    expect(mockReadFileSync).toHaveBeenCalledWith(promptFile, 'utf-8')
-    expect(mockReadFileSync).toHaveBeenCalledWith(systemPromptFile, 'utf-8')
-
-    // Check that the post call was made with both the prompt and system prompt from files
-    expect(mockPost).toHaveBeenCalledWith({
-      body: {
-        messages: [
-          {
-            role: 'system',
-            content: systemPromptContent
-          },
-          { role: 'user', content: promptContent }
-        ],
-        max_tokens: expect.any(Number),
-        model: expect.any(String)
-      }
-    })
-
-    verifyStandardResponse()
+    expect(core.setFailed).toHaveBeenCalledWith(`File for prompt-file was not found: ${promptFile}`)
+    expect(mockProcessExit).toHaveBeenCalledWith(1)
   })
 
-  it('passes custom max-tokens parameter to the model', async () => {
-    const customMaxTokens = 500
-
+  it('creates temporary files that persist for downstream steps', async () => {
     mockInputs({
-      prompt: 'Hello, AI!',
+      prompt: 'Test prompt',
       'system-prompt': 'You are a test assistant.',
-      'max-tokens': customMaxTokens.toString()
     })
 
     await run()
 
-    // Check that the post call was made with the correct max_tokens parameter
-    expect(mockPost).toHaveBeenCalledWith({
-      body: {
-        messages: expect.any(Array),
-        max_tokens: customMaxTokens,
-        model: expect.any(String)
-      }
+    // Verify temp file is created with keep: true so it persists
+    expect(mockFileSync).toHaveBeenCalledWith({
+      prefix: 'modelResponse-',
+      postfix: '.txt',
+      keep: true,
     })
 
-    verifyStandardResponse()
+    expect(core.setOutput).toHaveBeenNthCalledWith(2, 'response-file', '/secure/temp/dir/modelResponse-abc123.txt')
+    expect(mockWriteFileSync).toHaveBeenCalledWith('/secure/temp/dir/modelResponse-abc123.txt', 'Hello, user!', 'utf-8')
+
+    expect(mockProcessExit).toHaveBeenCalledWith(0)
   })
 })

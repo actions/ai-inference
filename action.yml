@@ -14,7 +14,16 @@ inputs:
     required: false
     default: ''
   prompt-file:
-    description: Path to a file containing the prompt
+    description: Path to a file containing the prompt (supports .txt and .prompt.yml
+      formats)
+    required: false
+    default: ''
+  input:
+    description: Template variables in YAML format for .prompt.yml files
+    required: false
+    default: ''
+  file_input:
+    description: Template variables in YAML format mapping variable names to file paths. The file contents will be used for templating.
     required: false
     default: ''
   model:
@@ -41,6 +50,18 @@ inputs:
     description: The token to use
     required: false
     default: ${{ github.token }}
+  enable-github-mcp:
+    description: Enable Model Context Protocol integration with GitHub tools
+    required: false
+    default: 'false'
+  github-mcp-token:
+    description: The token to use for GitHub MCP server (defaults to the main token if not specified). This must be a PAT for MCP to work.
+    required: false
+    default: ''
+  github-mcp-toolsets:
+    description: 'Comma-separated list of toolsets to enable for GitHub MCP (e.g., "repos,issues,pull_requests,actions"). Use "all" for all toolsets, "default" for default set. If not specified, uses default toolsets (context,repos,issues,pull_requests,users).'
+    required: false
+    default: ''
 
 # Define your outputs here.
 outputs:
@@ -50,5 +71,5 @@ outputs:
     description: The file path where the response is saved
 
 runs:
-  using: node20
+  using: node24
   main: dist/index.js

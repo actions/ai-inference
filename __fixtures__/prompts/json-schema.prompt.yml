@@ -1,0 +1,40 @@
+messages:
+  - role: system
+    content: You are a helpful assistant that describes animals using JSON format
+  - role: user
+    content: |-
+      Describe a {{animal}}
+      Use JSON format as specified in the response schema
+model: openai/gpt-4o
+responseFormat: json_schema
+jsonSchema: |-
+  {
+    "name": "describe_animal",
+    "strict": true,
+    "schema": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "The name of the animal"
+        },
+        "habitat": {
+          "type": "string",
+          "description": "The habitat the animal lives in"
+        },
+        "characteristics": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Key characteristics of the animal"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "habitat",
+        "characteristics"
+      ]
+    }
+  }

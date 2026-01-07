@@ -1,0 +1,30 @@
+---
+name: express-rate-limit
+version: 7.5.1
+type: npm
+summary: Basic IP rate-limiting middleware for Express. Use to limit repeated requests
+  to public APIs and/or endpoints such as password reset.
+homepage: https://github.com/express-rate-limit/express-rate-limit
+license: other
+licenses:
+- sources: license.md
+  text: "\uFEFF# MIT License\n\nCopyright 2023 Nathan Friedly, Vedant K\n\nPermission
+    is hereby granted, free of charge, to any person obtaining a copy of\nthis software
+    and associated documentation files (the \"Software\"), to deal in\nthe Software
+    without restriction, including without limitation the rights to\nuse, copy, modify,
+    merge, publish, distribute, sublicense, and/or sell copies of\nthe Software, and
+    to permit persons to whom the Software is furnished to do so,\nsubject to the
+    following conditions:\n\nThe above copyright notice and this permission notice
+    shall be included in all\ncopies or substantial portions of the Software.\n\nTHE
+    SOFTWARE IS PROVIDED \"AS IS\", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR\nIMPLIED,
+    INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS\nFOR A
+    PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR\nCOPYRIGHT
+    HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER\nIN AN ACTION
+    OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN\nCONNECTION WITH THE
+    SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.\n"
+- sources: readme.md
+  text: "MIT © [Nathan Friedly](http://nfriedly.com/),\n[Vedant K](https://github.com/gamemaker1)\n\n[`windowMs`]:\n\thttps://express-rate-limit.mintlify.app/reference/configuration#windowms\n[`limit`]:
+    https://express-rate-limit.mintlify.app/reference/configuration#limit\n[`message`]:\n\thttps://express-rate-limit.mintlify.app/reference/configuration#message\n[`statusCode`]:\n\thttps://express-rate-limit.mintlify.app/reference/configuration#statuscode\n[`handler`]:\n\thttps://express-rate-limit.mintlify.app/reference/configuration#handler\n[`legacyHeaders`]:\n\thttps://express-rate-limit.mintlify.app/reference/configuration#legacyheaders\n[`standardHeaders`]:\n\thttps://express-rate-limit.mintlify.app/reference/configuration#standardheaders\n[`identifier`]:\n\thttps://express-rate-limit.mintlify.app/reference/configuration#identifier\n[`store`]:
+    https://express-rate-limit.mintlify.app/reference/configuration#store\n[`passOnStoreError`]:\n\thttps://express-rate-limit.mintlify.app/reference/configuration#passOnStoreError\n[`keyGenerator`]:\n\thttps://express-rate-limit.mintlify.app/reference/configuration#keygenerator\n[`requestPropertyName`]:\n\thttps://express-rate-limit.mintlify.app/reference/configuration#requestpropertyname\n[`skip`]:
+    https://express-rate-limit.mintlify.app/reference/configuration#skip\n[`skipSuccessfulRequests`]:\n\thttps://express-rate-limit.mintlify.app/reference/configuration#skipsuccessfulrequests\n[`skipFailedRequests`]:\n\thttps://express-rate-limit.mintlify.app/reference/configuration#skipfailedrequests\n[`requestWasSuccessful`]:\n\thttps://express-rate-limit.mintlify.app/reference/configuration#requestwassuccessful\n[`validate`]:\n\thttps://express-rate-limit.mintlify.app/reference/configuration#validate"
+notices: []

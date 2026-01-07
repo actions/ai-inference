@@ -6,12 +6,5 @@
     "noEmit": true
   },
   "exclude": ["dist", "node_modules"],
-  "include": [
-    "__fixtures__",
-    "__tests__",
-    "src",
-    "eslint.config.mjs",
-    "jest.config.js",
-    "rollup.config.ts"
-  ]
+  "include": ["__fixtures__", "__tests__", "src", "eslint.config.mjs", "rollup.config.ts"]
 }

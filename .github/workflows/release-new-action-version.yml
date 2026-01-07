@@ -1,0 +1,21 @@
+name: Release new action version
+
+on:
+  release:
+    types: [released]
+
+env:
+  TAG_NAME: ${{ github.event.release.tag_name }}
+permissions:
+  contents: write
+
+jobs:
+  update_tag:
+    name: Update the major tag to include the ${{ github.event.release.tag_name }}
+      changes
+    runs-on: ubuntu-latest
+    steps:
+      - name: Update the ${{ env.TAG_NAME }} tag
+        uses: actions/publish-action@v0.3.0
+        with:
+          source-tag: ${{ env.TAG_NAME }}

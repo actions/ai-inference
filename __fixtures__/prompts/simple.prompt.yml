@@ -1,0 +1,6 @@
+messages:
+  - role: system
+    content: Be as concise as possible
+  - role: user
+    content: 'Compare {{a}} and {{b}}, please'
+model: openai/gpt-4o

@@ -1,0 +1,46 @@
+---
+name: media-typer
+version: 1.1.0
+type: npm
+summary: Simple RFC 6838 media type parser and formatter
+homepage:
+license: mit
+licenses:
+- sources: LICENSE
+  text: |
+    (The MIT License)
+
+    Copyright (c) 2014-2017 Douglas Christopher Wilson
+
+    Permission is hereby granted, free of charge, to any person obtaining
+    a copy of this software and associated documentation files (the
+    'Software'), to deal in the Software without restriction, including
+    without limitation the rights to use, copy, modify, merge, publish,
+    distribute, sublicense, and/or sell copies of the Software, and to
+    permit persons to whom the Software is furnished to do so, subject to
+    the following conditions:
+
+    The above copyright notice and this permission notice shall be
+    included in all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED 'AS IS', WITHOUT WARRANTY OF ANY KIND,
+    EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+    MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
+    IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY
+    CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,
+    TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
+    SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+- sources: README.md
+  text: |-
+    [MIT](LICENSE)
+
+    [coveralls-image]: https://badgen.net/coveralls/c/github/jshttp/media-typer/master
+    [coveralls-url]: https://coveralls.io/r/jshttp/media-typer?branch=master
+    [node-version-image]: https://badgen.net/npm/node/media-typer
+    [node-version-url]: https://nodejs.org/en/download
+    [npm-downloads-image]: https://badgen.net/npm/dm/media-typer
+    [npm-url]: https://npmjs.org/package/media-typer
+    [npm-version-image]: https://badgen.net/npm/v/media-typer
+    [travis-image]: https://badgen.net/travis/jshttp/media-typer/master
+    [travis-url]: https://travis-ci.org/jshttp/media-typer
+notices: []
