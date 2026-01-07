@@ -51844,7 +51844,7 @@ const safeJSON = (text) => {
 // File generated from our OpenAPI spec by Stainless. See CONTRIBUTING.md for details.
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
-const VERSION = '5.11.0'; // x-release-please-version
+const VERSION = '6.9.1'; // x-release-please-version
 
 // File generated from our OpenAPI spec by Stainless. See CONTRIBUTING.md for details.
 const isRunningInBrowser = () => {
@@ -53184,6 +53184,36 @@ class CursorPage extends AbstractPage {
         };
     }
 }
+class ConversationCursorPage extends AbstractPage {
+    constructor(client, response, body, options) {
+        super(client, response, body, options);
+        this.data = body.data || [];
+        this.has_more = body.has_more || false;
+        this.last_id = body.last_id || '';
+    }
+    getPaginatedItems() {
+        return this.data ?? [];
+    }
+    hasNextPage() {
+        if (this.has_more === false) {
+            return false;
+        }
+        return super.hasNextPage();
+    }
+    nextPageRequestOptions() {
+        const cursor = this.last_id;
+        if (!cursor) {
+            return null;
+        }
+        return {
+            ...this.options,
+            query: {
+                ...maybeObj(this.options.query),
+                after: cursor,
+            },
+        };
+    }
+}
 
 const checkFileSupport = () => {
     if (typeof File === 'undefined') {
@@ -53215,6 +53245,15 @@ function getName(value) {
         .pop() || undefined);
 }
 const isAsyncIterable = (value) => value != null && typeof value === 'object' && typeof value[Symbol.asyncIterator] === 'function';
+/**
+ * Returns a multipart/form-data request if any part of the given request body contains a File / Blob value.
+ * Otherwise returns the request as is.
+ */
+const maybeMultipartFormRequestOptions = async (opts, fetch) => {
+    if (!hasUploadableValue(opts.body))
+        return opts;
+    return { ...opts, body: await createForm(opts.body, fetch) };
+};
 const multipartFormRequestOptions = async (opts, fetch) => {
     return { ...opts, body: await createForm(opts.body, fetch) };
 };
@@ -53260,6 +53299,22 @@ const createForm = async (body, fetch) => {
 // We check for Blob not File because Bun.File doesn't inherit from File,
 // but they both inherit from Blob and have a `name` property at runtime.
 const isNamedBlob = (value) => value instanceof Blob && 'name' in value;
+const isUploadable = (value) => typeof value === 'object' &&
+    value !== null &&
+    (value instanceof Response || isAsyncIterable(value) || isNamedBlob(value));
+const hasUploadableValue = (value) => {
+    if (isUploadable(value))
+        return true;
+    if (Array.isArray(value))
+        return value.some(hasUploadableValue);
+    if (value && typeof value === 'object') {
+        for (const k in value) {
+            if (hasUploadableValue(value[k]))
+                return true;
+        }
+    }
+    return false;
+};
 const addFormValue = async (form, key, value) => {
     if (value === undefined)
         return;
@@ -53314,7 +53369,7 @@ const isResponseLike = (value) => value != null &&
     typeof value.blob === 'function';
 /**
  * Helper for creating a {@link File} to pass to an SDK upload method from a variety of different data formats
- * @param value the raw content of the file.  Can be an {@link Uploadable}, {@link BlobLikePart}, or {@link AsyncIterable} of {@link BlobLikePart}s
+ * @param value the raw content of the file. Can be an {@link Uploadable}, BlobLikePart, or AsyncIterable of BlobLikeParts
  * @param {string=} name the name of the file. If omitted, toFile will try to determine a file name from bits if possible
  * @param {Object=} options additional properties
  * @param {string=} options.type the MIME type of the content
@@ -53477,8 +53532,119 @@ let Messages$1 = class Messages extends APIResource {
     }
 };
 
-function isRunnableFunctionWithParse(fn) {
-    return typeof fn.parse === 'function';
+function isChatCompletionFunctionTool(tool) {
+    return tool !== undefined && 'function' in tool && tool.function !== undefined;
+}
+function isAutoParsableResponseFormat(response_format) {
+    return response_format?.['$brand'] === 'auto-parseable-response-format';
+}
+function isAutoParsableTool$1(tool) {
+    return tool?.['$brand'] === 'auto-parseable-tool';
+}
+function maybeParseChatCompletion(completion, params) {
+    if (!params || !hasAutoParseableInput$1(params)) {
+        return {
+            ...completion,
+            choices: completion.choices.map((choice) => {
+                assertToolCallsAreChatCompletionFunctionToolCalls(choice.message.tool_calls);
+                return {
+                    ...choice,
+                    message: {
+                        ...choice.message,
+                        parsed: null,
+                        ...(choice.message.tool_calls ?
+                            {
+                                tool_calls: choice.message.tool_calls,
+                            }
+                            : undefined),
+                    },
+                };
+            }),
+        };
+    }
+    return parseChatCompletion(completion, params);
+}
+function parseChatCompletion(completion, params) {
+    const choices = completion.choices.map((choice) => {
+        if (choice.finish_reason === 'length') {
+            throw new LengthFinishReasonError();
+        }
+        if (choice.finish_reason === 'content_filter') {
+            throw new ContentFilterFinishReasonError();
+        }
+        assertToolCallsAreChatCompletionFunctionToolCalls(choice.message.tool_calls);
+        return {
+            ...choice,
+            message: {
+                ...choice.message,
+                ...(choice.message.tool_calls ?
+                    {
+                        tool_calls: choice.message.tool_calls?.map((toolCall) => parseToolCall$1(params, toolCall)) ?? undefined,
+                    }
+                    : undefined),
+                parsed: choice.message.content && !choice.message.refusal ?
+                    parseResponseFormat(params, choice.message.content)
+                    : null,
+            },
+        };
+    });
+    return { ...completion, choices };
+}
+function parseResponseFormat(params, content) {
+    if (params.response_format?.type !== 'json_schema') {
+        return null;
+    }
+    if (params.response_format?.type === 'json_schema') {
+        if ('$parseRaw' in params.response_format) {
+            const response_format = params.response_format;
+            return response_format.$parseRaw(content);
+        }
+        return JSON.parse(content);
+    }
+    return null;
+}
+function parseToolCall$1(params, toolCall) {
+    const inputTool = params.tools?.find((inputTool) => isChatCompletionFunctionTool(inputTool) && inputTool.function?.name === toolCall.function.name); // TS doesn't narrow based on isChatCompletionTool
+    return {
+        ...toolCall,
+        function: {
+            ...toolCall.function,
+            parsed_arguments: isAutoParsableTool$1(inputTool) ? inputTool.$parseRaw(toolCall.function.arguments)
+                : inputTool?.function.strict ? JSON.parse(toolCall.function.arguments)
+                    : null,
+        },
+    };
+}
+function shouldParseToolCall(params, toolCall) {
+    if (!params || !('tools' in params) || !params.tools) {
+        return false;
+    }
+    const inputTool = params.tools?.find((inputTool) => isChatCompletionFunctionTool(inputTool) && inputTool.function?.name === toolCall.function.name);
+    return (isChatCompletionFunctionTool(inputTool) &&
+        (isAutoParsableTool$1(inputTool) || inputTool?.function.strict || false));
+}
+function hasAutoParseableInput$1(params) {
+    if (isAutoParsableResponseFormat(params.response_format)) {
+        return true;
+    }
+    return (params.tools?.some((t) => isAutoParsableTool$1(t) || (t.type === 'function' && t.function.strict === true)) ?? false);
+}
+function assertToolCallsAreChatCompletionFunctionToolCalls(toolCalls) {
+    for (const toolCall of toolCalls || []) {
+        if (toolCall.type !== 'function') {
+            throw new OpenAIError(`Currently only \`function\` tool calls are supported; Received \`${toolCall.type}\``);
+        }
+    }
+}
+function validateInputTools(tools) {
+    for (const tool of tools ?? []) {
+        if (tool.type !== 'function') {
+            throw new OpenAIError(`Currently only \`function\` tool types support auto-parsing; Received \`${tool.type}\``);
+        }
+        if (tool.function.strict !== true) {
+            throw new OpenAIError(`The \`${tool.function.name}\` tool is not marked with \`strict: true\`. Only strict function tools can be auto-parsed`);
+        }
+    }
 }
 
 const isAssistantMessage = (message) => {
@@ -53672,104 +53838,8 @@ _EventStream_connectedPromise = new WeakMap(), _EventStream_resolveConnectedProm
     return this._emit('error', new OpenAIError(String(error)));
 };
 
-function isAutoParsableResponseFormat(response_format) {
-    return response_format?.['$brand'] === 'auto-parseable-response-format';
-}
-function isAutoParsableTool$1(tool) {
-    return tool?.['$brand'] === 'auto-parseable-tool';
-}
-function maybeParseChatCompletion(completion, params) {
-    if (!params || !hasAutoParseableInput$1(params)) {
-        return {
-            ...completion,
-            choices: completion.choices.map((choice) => ({
-                ...choice,
-                message: {
-                    ...choice.message,
-                    parsed: null,
-                    ...(choice.message.tool_calls ?
-                        {
-                            tool_calls: choice.message.tool_calls,
-                        }
-                        : undefined),
-                },
-            })),
-        };
-    }
-    return parseChatCompletion(completion, params);
-}
-function parseChatCompletion(completion, params) {
-    const choices = completion.choices.map((choice) => {
-        if (choice.finish_reason === 'length') {
-            throw new LengthFinishReasonError();
-        }
-        if (choice.finish_reason === 'content_filter') {
-            throw new ContentFilterFinishReasonError();
-        }
-        return {
-            ...choice,
-            message: {
-                ...choice.message,
-                ...(choice.message.tool_calls ?
-                    {
-                        tool_calls: choice.message.tool_calls?.map((toolCall) => parseToolCall$1(params, toolCall)) ?? undefined,
-                    }
-                    : undefined),
-                parsed: choice.message.content && !choice.message.refusal ?
-                    parseResponseFormat(params, choice.message.content)
-                    : null,
-            },
-        };
-    });
-    return { ...completion, choices };
-}
-function parseResponseFormat(params, content) {
-    if (params.response_format?.type !== 'json_schema') {
-        return null;
-    }
-    if (params.response_format?.type === 'json_schema') {
-        if ('$parseRaw' in params.response_format) {
-            const response_format = params.response_format;
-            return response_format.$parseRaw(content);
-        }
-        return JSON.parse(content);
-    }
-    return null;
-}
-function parseToolCall$1(params, toolCall) {
-    const inputTool = params.tools?.find((inputTool) => inputTool.function?.name === toolCall.function.name);
-    return {
-        ...toolCall,
-        function: {
-            ...toolCall.function,
-            parsed_arguments: isAutoParsableTool$1(inputTool) ? inputTool.$parseRaw(toolCall.function.arguments)
-                : inputTool?.function.strict ? JSON.parse(toolCall.function.arguments)
-                    : null,
-        },
-    };
-}
-function shouldParseToolCall(params, toolCall) {
-    if (!params) {
-        return false;
-    }
-    const inputTool = params.tools?.find((inputTool) => inputTool.function?.name === toolCall.function.name);
-    return isAutoParsableTool$1(inputTool) || inputTool?.function.strict || false;
-}
-function hasAutoParseableInput$1(params) {
-    if (isAutoParsableResponseFormat(params.response_format)) {
-        return true;
-    }
-    return (params.tools?.some((t) => isAutoParsableTool$1(t) || (t.type === 'function' && t.function.strict === true)) ?? false);
-}
-function validateInputTools(tools) {
-    for (const tool of tools ?? []) {
-        if (tool.type !== 'function') {
-            throw new OpenAIError(`Currently only \`function\` tool types support auto-parsing; Received \`${tool.type}\``);
-        }
-        if (tool.function.strict !== true) {
-            throw new OpenAIError(`The \`${tool.function.name}\` tool is not marked with \`strict: true\`. Only strict function tools can be auto-parsed`);
-        }
-    }
+function isRunnableFunctionWithParse(fn) {
+    return typeof fn.parse === 'function';
 }
 
 var _AbstractChatCompletionRunner_instances, _AbstractChatCompletionRunner_getFinalContent, _AbstractChatCompletionRunner_getFinalMessage, _AbstractChatCompletionRunner_getFinalFunctionToolCall, _AbstractChatCompletionRunner_getFinalFunctionToolCallResult, _AbstractChatCompletionRunner_calculateTotalUsage, _AbstractChatCompletionRunner_validateParams, _AbstractChatCompletionRunner_stringifyFunctionCallResult;
@@ -53895,7 +53965,7 @@ class AbstractChatCompletionRunner extends EventStream {
     async _runTools(client, params, options) {
         const role = 'tool';
         const { tool_choice = 'auto', stream, ...restParams } = params;
-        const singleFunctionToCall = typeof tool_choice !== 'string' && tool_choice?.function?.name;
+        const singleFunctionToCall = typeof tool_choice !== 'string' && tool_choice.type === 'function' && tool_choice?.function?.name;
         const { maxChatCompletions = DEFAULT_MAX_CHAT_COMPLETIONS } = options || {};
         // TODO(someday): clean this logic up
         const inputTools = params.tools.map((tool) => {
@@ -54013,7 +54083,7 @@ _AbstractChatCompletionRunner_instances = new WeakSet(), _AbstractChatCompletion
     for (let i = this.messages.length - 1; i >= 0; i--) {
         const message = this.messages[i];
         if (isAssistantMessage(message) && message?.tool_calls?.length) {
-            return message.tool_calls.at(-1)?.function;
+            return message.tool_calls.filter((x) => x.type === 'function').at(-1)?.function;
         }
     }
     return;
@@ -54491,7 +54561,7 @@ class ChatCompletionStream extends AbstractChatCompletionRunner {
             throw new Error('tool call snapshot missing `type`');
         }
         if (toolCallSnapshot.type === 'function') {
-            const inputTool = __classPrivateFieldGet(this, _ChatCompletionStream_params, "f")?.tools?.find((tool) => tool.type === 'function' && tool.function.name === toolCallSnapshot.function.name);
+            const inputTool = __classPrivateFieldGet(this, _ChatCompletionStream_params, "f")?.tools?.find((tool) => isChatCompletionFunctionTool(tool) && tool.function.name === toolCallSnapshot.function.name); // TS doesn't narrow based on isChatCompletionTool
             this._emit('tool_calls.function.arguments.done', {
                 name: toolCallSnapshot.function.name,
                 index: toolCallIndex,
@@ -55150,7 +55220,7 @@ class Assistants extends APIResource {
 }
 
 // File generated from our OpenAPI spec by Stainless. See CONTRIBUTING.md for details.
-class Sessions extends APIResource {
+let Sessions$1 = class Sessions extends APIResource {
     /**
      * Create an ephemeral API token for use in client-side applications with the
      * Realtime API. Can be configured with the same session parameters as the
@@ -55173,7 +55243,7 @@ class Sessions extends APIResource {
             headers: buildHeaders([{ 'OpenAI-Beta': 'assistants=v2' }, options?.headers]),
         });
     }
-}
+};
 
 // File generated from our OpenAPI spec by Stainless. See CONTRIBUTING.md for details.
 class TranscriptionSessions extends APIResource {
@@ -55202,15 +55272,136 @@ class TranscriptionSessions extends APIResource {
 }
 
 // File generated from our OpenAPI spec by Stainless. See CONTRIBUTING.md for details.
-class Realtime extends APIResource {
+/**
+ * @deprecated Realtime has now launched and is generally available. The old beta API is now deprecated.
+ */
+let Realtime$1 = class Realtime extends APIResource {
+    constructor() {
+        super(...arguments);
+        this.sessions = new Sessions$1(this._client);
+        this.transcriptionSessions = new TranscriptionSessions(this._client);
+    }
+};
+Realtime$1.Sessions = Sessions$1;
+Realtime$1.TranscriptionSessions = TranscriptionSessions;
+
+// File generated from our OpenAPI spec by Stainless. See CONTRIBUTING.md for details.
+class Sessions extends APIResource {
+    /**
+     * Create a ChatKit session
+     *
+     * @example
+     * ```ts
+     * const chatSession =
+     *   await client.beta.chatkit.sessions.create({
+     *     user: 'x',
+     *     workflow: { id: 'id' },
+     *   });
+     * ```
+     */
+    create(body, options) {
+        return this._client.post('/chatkit/sessions', {
+            body,
+            ...options,
+            headers: buildHeaders([{ 'OpenAI-Beta': 'chatkit_beta=v1' }, options?.headers]),
+        });
+    }
+    /**
+     * Cancel a ChatKit session
+     *
+     * @example
+     * ```ts
+     * const chatSession =
+     *   await client.beta.chatkit.sessions.cancel('cksess_123');
+     * ```
+     */
+    cancel(sessionID, options) {
+        return this._client.post(path `/chatkit/sessions/${sessionID}/cancel`, {
+            ...options,
+            headers: buildHeaders([{ 'OpenAI-Beta': 'chatkit_beta=v1' }, options?.headers]),
+        });
+    }
+}
+
+// File generated from our OpenAPI spec by Stainless. See CONTRIBUTING.md for details.
+let Threads$1 = class Threads extends APIResource {
+    /**
+     * Retrieve a ChatKit thread
+     *
+     * @example
+     * ```ts
+     * const chatkitThread =
+     *   await client.beta.chatkit.threads.retrieve('cthr_123');
+     * ```
+     */
+    retrieve(threadID, options) {
+        return this._client.get(path `/chatkit/threads/${threadID}`, {
+            ...options,
+            headers: buildHeaders([{ 'OpenAI-Beta': 'chatkit_beta=v1' }, options?.headers]),
+        });
+    }
+    /**
+     * List ChatKit threads
+     *
+     * @example
+     * ```ts
+     * // Automatically fetches more pages as needed.
+     * for await (const chatkitThread of client.beta.chatkit.threads.list()) {
+     *   // ...
+     * }
+     * ```
+     */
+    list(query = {}, options) {
+        return this._client.getAPIList('/chatkit/threads', (ConversationCursorPage), {
+            query,
+            ...options,
+            headers: buildHeaders([{ 'OpenAI-Beta': 'chatkit_beta=v1' }, options?.headers]),
+        });
+    }
+    /**
+     * Delete a ChatKit thread
+     *
+     * @example
+     * ```ts
+     * const thread = await client.beta.chatkit.threads.delete(
+     *   'cthr_123',
+     * );
+     * ```
+     */
+    delete(threadID, options) {
+        return this._client.delete(path `/chatkit/threads/${threadID}`, {
+            ...options,
+            headers: buildHeaders([{ 'OpenAI-Beta': 'chatkit_beta=v1' }, options?.headers]),
+        });
+    }
+    /**
+     * List ChatKit thread items
+     *
+     * @example
+     * ```ts
+     * // Automatically fetches more pages as needed.
+     * for await (const thread of client.beta.chatkit.threads.listItems(
+     *   'cthr_123',
+     * )) {
+     *   // ...
+     * }
+     * ```
+     */
+    listItems(threadID, query = {}, options) {
+        return this._client.getAPIList(path `/chatkit/threads/${threadID}/items`, (ConversationCursorPage), { query, ...options, headers: buildHeaders([{ 'OpenAI-Beta': 'chatkit_beta=v1' }, options?.headers]) });
+    }
+};
+
+// File generated from our OpenAPI spec by Stainless. See CONTRIBUTING.md for details.
+class ChatKit extends APIResource {
     constructor() {
         super(...arguments);
         this.sessions = new Sessions(this._client);
-        this.transcriptionSessions = new TranscriptionSessions(this._client);
+        this.threads = new Threads$1(this._client);
     }
 }
-Realtime.Sessions = Sessions;
-Realtime.TranscriptionSessions = TranscriptionSessions;
+ChatKit.Sessions = Sessions;
+ChatKit.Threads = Threads$1;
 
 // File generated from our OpenAPI spec by Stainless. See CONTRIBUTING.md for details.
 /**
@@ -56148,12 +56339,14 @@ Threads.Messages = Messages;
 class Beta extends APIResource {
     constructor() {
         super(...arguments);
-        this.realtime = new Realtime(this._client);
+        this.realtime = new Realtime$1(this._client);
+        this.chatkit = new ChatKit(this._client);
         this.assistants = new Assistants(this._client);
         this.threads = new Threads(this._client);
     }
 }
-Beta.Realtime = Realtime;
+Beta.Realtime = Realtime$1;
+Beta.ChatKit = ChatKit;
 Beta.Assistants = Assistants;
 Beta.Threads = Threads;
 
@@ -56258,6 +56451,74 @@ class Containers extends APIResource {
     }
 }
 Containers.Files = Files$2;
+
+// File generated from our OpenAPI spec by Stainless. See CONTRIBUTING.md for details.
+class Items extends APIResource {
+    /**
+     * Create items in a conversation with the given ID.
+     */
+    create(conversationID, params, options) {
+        const { include, ...body } = params;
+        return this._client.post(path `/conversations/${conversationID}/items`, {
+            query: { include },
+            body,
+            ...options,
+        });
+    }
+    /**
+     * Get a single item from a conversation with the given IDs.
+     */
+    retrieve(itemID, params, options) {
+        const { conversation_id, ...query } = params;
+        return this._client.get(path `/conversations/${conversation_id}/items/${itemID}`, { query, ...options });
+    }
+    /**
+     * List all items for a conversation with the given ID.
+     */
+    list(conversationID, query = {}, options) {
+        return this._client.getAPIList(path `/conversations/${conversationID}/items`, (ConversationCursorPage), { query, ...options });
+    }
+    /**
+     * Delete an item from a conversation with the given IDs.
+     */
+    delete(itemID, params, options) {
+        const { conversation_id } = params;
+        return this._client.delete(path `/conversations/${conversation_id}/items/${itemID}`, options);
+    }
+}
+
+// File generated from our OpenAPI spec by Stainless. See CONTRIBUTING.md for details.
+class Conversations extends APIResource {
+    constructor() {
+        super(...arguments);
+        this.items = new Items(this._client);
+    }
+    /**
+     * Create a conversation.
+     */
+    create(body = {}, options) {
+        return this._client.post('/conversations', { body, ...options });
+    }
+    /**
+     * Get a conversation
+     */
+    retrieve(conversationID, options) {
+        return this._client.get(path `/conversations/${conversationID}`, options);
+    }
+    /**
+     * Update a conversation
+     */
+    update(conversationID, body, options) {
+        return this._client.post(path `/conversations/${conversationID}`, { body, ...options });
+    }
+    /**
+     * Delete a conversation. Items in the conversation will not be deleted.
+     */
+    delete(conversationID, options) {
+        return this._client.delete(path `/conversations/${conversationID}`, options);
+    }
+}
+Conversations.Items = Items;
 
 // File generated from our OpenAPI spec by Stainless. See CONTRIBUTING.md for details.
 class Embeddings extends APIResource {
@@ -56423,22 +56684,21 @@ let Files$1 = class Files extends APIResource {
     /**
      * Upload a file that can be used across various endpoints. Individual files can be
      * up to 512 MB, and the size of all files uploaded by one organization can be up
-     * to 100 GB.
+     * to 1 TB.
      *
-     * The Assistants API supports files up to 2 million tokens and of specific file
-     * types. See the
-     * [Assistants Tools guide](https://platform.openai.com/docs/assistants/tools) for
-     * details.
-     *
-     * The Fine-tuning API only supports `.jsonl` files. The input also has certain
-     * required formats for fine-tuning
-     * [chat](https://platform.openai.com/docs/api-reference/fine-tuning/chat-input) or
-     * [completions](https://platform.openai.com/docs/api-reference/fine-tuning/completions-input)
-     * models.
-     *
-     * The Batch API only supports `.jsonl` files up to 200 MB in size. The input also
-     * has a specific required
-     * [format](https://platform.openai.com/docs/api-reference/batch/request-input).
+     * - The Assistants API supports files up to 2 million tokens and of specific file
+     *   types. See the
+     *   [Assistants Tools guide](https://platform.openai.com/docs/assistants/tools)
+     *   for details.
+     * - The Fine-tuning API only supports `.jsonl` files. The input also has certain
+     *   required formats for fine-tuning
+     *   [chat](https://platform.openai.com/docs/api-reference/fine-tuning/chat-input)
+     *   or
+     *   [completions](https://platform.openai.com/docs/api-reference/fine-tuning/completions-input)
+     *   models.
+     * - The Batch API only supports `.jsonl` files up to 200 MB in size. The input
+     *   also has a specific required
+     *   [format](https://platform.openai.com/docs/api-reference/batch/request-input).
      *
      * Please [contact us](https://help.openai.com/) if you need to increase these
      * storage limits.
@@ -56459,7 +56719,7 @@ let Files$1 = class Files extends APIResource {
         return this._client.getAPIList('/files', (CursorPage), { query, ...options });
     }
     /**
-     * Delete a file.
+     * Delete a file and remove it from all vector stores.
      */
     delete(fileID, options) {
         return this._client.delete(path `/files/${fileID}`, options);
@@ -56846,6 +57106,101 @@ class Moderations extends APIResource {
     }
 }
 
+// File generated from our OpenAPI spec by Stainless. See CONTRIBUTING.md for details.
+class Calls extends APIResource {
+    /**
+     * Accept an incoming SIP call and configure the realtime session that will handle
+     * it.
+     *
+     * @example
+     * ```ts
+     * await client.realtime.calls.accept('call_id', {
+     *   type: 'realtime',
+     * });
+     * ```
+     */
+    accept(callID, body, options) {
+        return this._client.post(path `/realtime/calls/${callID}/accept`, {
+            body,
+            ...options,
+            headers: buildHeaders([{ Accept: '*/*' }, options?.headers]),
+        });
+    }
+    /**
+     * End an active Realtime API call, whether it was initiated over SIP or WebRTC.
+     *
+     * @example
+     * ```ts
+     * await client.realtime.calls.hangup('call_id');
+     * ```
+     */
+    hangup(callID, options) {
+        return this._client.post(path `/realtime/calls/${callID}/hangup`, {
+            ...options,
+            headers: buildHeaders([{ Accept: '*/*' }, options?.headers]),
+        });
+    }
+    /**
+     * Transfer an active SIP call to a new destination using the SIP REFER verb.
+     *
+     * @example
+     * ```ts
+     * await client.realtime.calls.refer('call_id', {
+     *   target_uri: 'tel:+14155550123',
+     * });
+     * ```
+     */
+    refer(callID, body, options) {
+        return this._client.post(path `/realtime/calls/${callID}/refer`, {
+            body,
+            ...options,
+            headers: buildHeaders([{ Accept: '*/*' }, options?.headers]),
+        });
+    }
+    /**
+     * Decline an incoming SIP call by returning a SIP status code to the caller.
+     *
+     * @example
+     * ```ts
+     * await client.realtime.calls.reject('call_id');
+     * ```
+     */
+    reject(callID, body = {}, options) {
+        return this._client.post(path `/realtime/calls/${callID}/reject`, {
+            body,
+            ...options,
+            headers: buildHeaders([{ Accept: '*/*' }, options?.headers]),
+        });
+    }
+}
+
+// File generated from our OpenAPI spec by Stainless. See CONTRIBUTING.md for details.
+class ClientSecrets extends APIResource {
+    /**
+     * Create a Realtime client secret with an associated session configuration.
+     *
+     * @example
+     * ```ts
+     * const clientSecret =
+     *   await client.realtime.clientSecrets.create();
+     * ```
+     */
+    create(body, options) {
+        return this._client.post('/realtime/client_secrets', { body, ...options });
+    }
+}
+
+// File generated from our OpenAPI spec by Stainless. See CONTRIBUTING.md for details.
+class Realtime extends APIResource {
+    constructor() {
+        super(...arguments);
+        this.clientSecrets = new ClientSecrets(this._client);
+        this.calls = new Calls(this._client);
+    }
+}
+Realtime.ClientSecrets = ClientSecrets;
+Realtime.Calls = Calls;
+
 function maybeParseResponse(response, params) {
     if (!params || !hasAutoParseableInput(params)) {
         return {
@@ -57096,8 +57451,16 @@ class ResponseStream extends EventStream {
                 if (!output) {
                     throw new OpenAIError(`missing output at index ${event.output_index}`);
                 }
-                if (output.type === 'message') {
-                    output.content.push(event.part);
+                const type = output.type;
+                const part = event.part;
+                if (type === 'message' && part.type !== 'reasoning_text') {
+                    output.content.push(part);
+                }
+                else if (type === 'reasoning' && part.type === 'reasoning_text') {
+                    if (!output.content) {
+                        output.content = [];
+                    }
+                    output.content.push(part);
                 }
                 break;
             }
@@ -57125,6 +57488,23 @@ class ResponseStream extends EventStream {
                 }
                 if (output.type === 'function_call') {
                     output.arguments += event.delta;
+                }
+                break;
+            }
+            case 'response.reasoning_text.delta': {
+                const output = snapshot.output[event.output_index];
+                if (!output) {
+                    throw new OpenAIError(`missing output at index ${event.output_index}`);
+                }
+                if (output.type === 'reasoning') {
+                    const content = output.content?.[event.content_index];
+                    if (!content) {
+                        throw new OpenAIError(`missing content at index ${event.content_index}`);
+                    }
+                    if (content.type !== 'reasoning_text') {
+                        throw new OpenAIError(`expected content to be 'reasoning_text', got ${content.type}`);
+                    }
+                    content.text += event.delta;
                 }
                 break;
             }
@@ -57222,10 +57602,26 @@ class InputItems extends APIResource {
 }
 
 // File generated from our OpenAPI spec by Stainless. See CONTRIBUTING.md for details.
+class InputTokens extends APIResource {
+    /**
+     * Get input token counts
+     *
+     * @example
+     * ```ts
+     * const response = await client.responses.inputTokens.count();
+     * ```
+     */
+    count(body = {}, options) {
+        return this._client.post('/responses/input_tokens', { body, ...options });
+    }
+}
+
+// File generated from our OpenAPI spec by Stainless. See CONTRIBUTING.md for details.
 class Responses extends APIResource {
     constructor() {
         super(...arguments);
         this.inputItems = new InputItems(this._client);
+        this.inputTokens = new InputTokens(this._client);
     }
     create(body, options) {
         return this._client.post('/responses', { body, ...options, stream: body.stream ?? false })._thenUnwrap((rsp) => {
@@ -57291,6 +57687,7 @@ class Responses extends APIResource {
     }
 }
 Responses.InputItems = InputItems;
+Responses.InputTokens = InputTokens;
 
 // File generated from our OpenAPI spec by Stainless. See CONTRIBUTING.md for details.
 class Parts extends APIResource {
@@ -57719,6 +58116,51 @@ VectorStores.Files = Files;
 VectorStores.FileBatches = FileBatches;
 
 // File generated from our OpenAPI spec by Stainless. See CONTRIBUTING.md for details.
+class Videos extends APIResource {
+    /**
+     * Create a video
+     */
+    create(body, options) {
+        return this._client.post('/videos', maybeMultipartFormRequestOptions({ body, ...options }, this._client));
+    }
+    /**
+     * Retrieve a video
+     */
+    retrieve(videoID, options) {
+        return this._client.get(path `/videos/${videoID}`, options);
+    }
+    /**
+     * List videos
+     */
+    list(query = {}, options) {
+        return this._client.getAPIList('/videos', (ConversationCursorPage), { query, ...options });
+    }
+    /**
+     * Delete a video
+     */
+    delete(videoID, options) {
+        return this._client.delete(path `/videos/${videoID}`, options);
+    }
+    /**
+     * Download video content
+     */
+    downloadContent(videoID, query = {}, options) {
+        return this._client.get(path `/videos/${videoID}/content`, {
+            query,
+            ...options,
+            headers: buildHeaders([{ Accept: 'application/binary' }, options?.headers]),
+            __binaryResponse: true,
+        });
+    }
+    /**
+     * Create a video remix
+     */
+    remix(videoID, body, options) {
+        return this._client.post(path `/videos/${videoID}/remix`, maybeMultipartFormRequestOptions({ body, ...options }, this._client));
+    }
+}
+
+// File generated from our OpenAPI spec by Stainless. See CONTRIBUTING.md for details.
 var _Webhooks_instances, _Webhooks_validateSecret, _Webhooks_getRequiredHeader;
 class Webhooks extends APIResource {
     constructor() {
@@ -57852,10 +58294,13 @@ class OpenAI {
         this.batches = new Batches(this);
         this.uploads = new Uploads(this);
         this.responses = new Responses(this);
+        this.realtime = new Realtime(this);
+        this.conversations = new Conversations(this);
         this.evals = new Evals(this);
         this.containers = new Containers(this);
+        this.videos = new Videos(this);
         if (apiKey === undefined) {
-            throw new OpenAIError("The OPENAI_API_KEY environment variable is missing or empty; either provide it, or instantiate the OpenAI client with an apiKey option, like new OpenAI({ apiKey: 'My API Key' }).");
+            throw new OpenAIError('Missing credentials. Please pass an `apiKey`, or set the `OPENAI_API_KEY` environment variable.');
         }
         const options = {
             apiKey,
@@ -57883,7 +58328,7 @@ class OpenAI {
         this.fetch = options.fetch ?? getDefaultFetch();
         __classPrivateFieldSet(this, _OpenAI_encoder, FallbackEncoder);
         this._options = options;
-        this.apiKey = apiKey;
+        this.apiKey = typeof apiKey === 'string' ? apiKey : 'Missing Key';
         this.organization = organization;
         this.project = project;
         this.webhookSecret = webhookSecret;
@@ -57930,6 +58375,27 @@ class OpenAI {
     makeStatusError(status, error, message, headers) {
         return APIError.generate(status, error, message, headers);
     }
+    async _callApiKey() {
+        const apiKey = this._options.apiKey;
+        if (typeof apiKey !== 'function')
+            return false;
+        let token;
+        try {
+            token = await apiKey();
+        }
+        catch (err) {
+            if (err instanceof OpenAIError)
+                throw err;
+            throw new OpenAIError(`Failed to get token from 'apiKey' function: ${err.message}`, 
+            // @ts-ignore
+            { cause: err });
+        }
+        if (typeof token !== 'string' || !token) {
+            throw new OpenAIError(`Expected 'apiKey' function argument to return a string but it returned ${token}`);
+        }
+        this.apiKey = token;
+        return true;
+    }
     buildURL(path, query, defaultBaseURL) {
         const baseURL = (!__classPrivateFieldGet(this, _OpenAI_instances, "m", _OpenAI_baseURLOverridden).call(this) && defaultBaseURL) || this.baseURL;
         const url = isAbsoluteURL(path) ?
@@ -57947,7 +58413,9 @@ class OpenAI {
     /**
      * Used as a callback for mutating the given `FinalRequestOptions` object.
      */
-    async prepareOptions(options) { }
+    async prepareOptions(options) {
+        await this._callApiKey();
+    }
     /**
      * Used as a callback for mutating the given `RequestInit` object.
      *
@@ -58006,7 +58474,7 @@ class OpenAI {
         const controller = new AbortController();
         const response = await this.fetchWithTimeout(url, req, timeout, controller).catch(castToError);
         const headersTime = Date.now();
-        if (response instanceof Error) {
+        if (response instanceof globalThis.Error) {
             const retryMessage = `retrying, ${retriesRemaining} attempts remaining`;
             if (options.signal?.aborted) {
                 throw new APIUserAbortError();
@@ -58242,7 +58710,7 @@ class OpenAI {
                 // Preserve legacy string encoding behavior for now
                 headers.values.has('content-type')) ||
             // `Blob` is superset of `File`
-            body instanceof Blob ||
+            (globalThis.Blob && body instanceof globalThis.Blob) ||
             // `FormData` -> `multipart/form-data`
             body instanceof FormData ||
             // `URLSearchParams` -> `application/x-www-form-urlencoded`
@@ -58297,8 +58765,11 @@ OpenAI.Beta = Beta;
 OpenAI.Batches = Batches;
 OpenAI.Uploads = Uploads;
 OpenAI.Responses = Responses;
+OpenAI.Realtime = Realtime;
+OpenAI.Conversations = Conversations;
 OpenAI.Evals = Evals;
 OpenAI.Containers = Containers;
+OpenAI.Videos = Videos;
 
 /**
  * Simple one-shot inference without tools
