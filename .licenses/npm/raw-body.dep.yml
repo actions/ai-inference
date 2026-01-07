@@ -1,6 +1,6 @@
 ---
 name: raw-body
-version: 3.0.0
+version: 3.0.2
 type: npm
 summary: Get and validate the raw body of a readable stream.
 homepage:

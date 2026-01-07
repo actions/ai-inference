@@ -1,16 +1,17 @@
 ---
-name: "@modelcontextprotocol/sdk"
-version: 1.25.2
+name: jose
+version: 6.1.3
 type: npm
-summary: Model Context Protocol implementation for TypeScript
-homepage: https://modelcontextprotocol.io
+summary: JWA, JWS, JWE, JWT, JWK, JWKS for Node.js, Browser, Cloudflare Workers, Deno,
+  Bun, and other Web-interoperable runtimes
+homepage: https://github.com/panva/jose
 license: mit
 licenses:
-- sources: LICENSE
+- sources: LICENSE.md
   text: |
-    MIT License
+    The MIT License (MIT)
 
-    Copyright (c) 2024 Anthropic, PBC
+    Copyright (c) 2018 Filip Skokan
 
     Permission is hereby granted, free of charge, to any person obtaining a copy
     of this software and associated documentation files (the "Software"), to deal
@@ -29,7 +30,4 @@ licenses:
     LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
     OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
     SOFTWARE.
-- sources: README.md
-  text: This project is licensed under the MIT License—see the [LICENSE](LICENSE)
-    file for details.
 notices: []

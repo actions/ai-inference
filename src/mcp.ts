@@ -35,17 +35,27 @@ export interface GitHubMCPClient {
 /**
  * Connect to the GitHub MCP server and retrieve available tools
  */
-export async function connectToGitHubMCP(token: string): Promise<GitHubMCPClient | null> {
+export async function connectToGitHubMCP(token: string, toolsets?: string): Promise<GitHubMCPClient | null> {
   const githubMcpUrl = 'https://api.githubcopilot.com/mcp/'
 
   core.info('Connecting to GitHub MCP server...')
 
+  const headers: Record<string, string> = {
+    Authorization: `Bearer ${token}`,
+    'X-MCP-Readonly': 'true',
+  }
+
+  // Add toolsets header if specified
+  if (toolsets && toolsets.trim() !== '') {
+    headers['X-MCP-Toolsets'] = toolsets
+    core.info(`Using GitHub MCP toolsets: ${toolsets}`)
+  } else {
+    core.info('Using default GitHub MCP toolsets')
+  }
+
   const transport = new StreamableHTTPClientTransport(new URL(githubMcpUrl), {
     requestInit: {
-      headers: {
-        Authorization: `Bearer ${token}`,
-        'X-MCP-Readonly': 'true',
-      },
+      headers,
     },
   })
 

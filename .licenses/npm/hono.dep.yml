@@ -1,16 +1,16 @@
 ---
-name: "@modelcontextprotocol/sdk"
-version: 1.25.2
+name: hono
+version: 4.11.3
 type: npm
-summary: Model Context Protocol implementation for TypeScript
-homepage: https://modelcontextprotocol.io
+summary: Web framework built on Web Standards
+homepage: https://hono.dev
 license: mit
 licenses:
 - sources: LICENSE
   text: |
     MIT License
 
-    Copyright (c) 2024 Anthropic, PBC
+    Copyright (c) 2021 - present, Yusuke Wada and Hono contributors
 
     Permission is hereby granted, free of charge, to any person obtaining a copy
     of this software and associated documentation files (the "Software"), to deal
@@ -30,6 +30,5 @@ licenses:
     OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
     SOFTWARE.
 - sources: README.md
-  text: This project is licensed under the MIT License—see the [LICENSE](LICENSE)
-    file for details.
+  text: Distributed under the MIT License. See [LICENSE](LICENSE) for more information.
 notices: []

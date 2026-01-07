@@ -18,11 +18,6 @@ import {
  * @returns Resolves when the action is complete.
  */
 export async function run(): Promise<void> {
-  let responseFile: tmp.FileResult | null = null
-
-  // Set up graceful cleanup for temporary files on process exit
-  tmp.setGracefulCleanup()
-
   try {
     const promptFilePath = core.getInput('prompt-file')
     const inputVariables = core.getInput('input')
@@ -66,6 +61,7 @@ export async function run(): Promise<void> {
 
     // Get GitHub MCP token (use dedicated token if provided, otherwise fall back to main token)
     const githubMcpToken = core.getInput('github-mcp-token') || token
+    const githubMcpToolsets = core.getInput('github-mcp-toolsets')
 
     const endpoint = core.getInput('endpoint')
 
@@ -87,7 +83,7 @@ export async function run(): Promise<void> {
     let modelResponse: string | null = null
 
     if (enableMcp) {
-      const mcpClient = await connectToGitHubMCP(githubMcpToken)
+      const mcpClient = await connectToGitHubMCP(githubMcpToken, githubMcpToolsets)
 
       if (mcpClient) {
         modelResponse = await mcpInference(inferenceRequest, mcpClient)
@@ -101,10 +97,13 @@ export async function run(): Promise<void> {
 
     core.setOutput('response', modelResponse || '')
 
-    // Create a secure temporary file instead of using the temp directory directly
-    responseFile = tmp.fileSync({
+    // Create a temporary file for the response that persists for downstream steps.
+    // We use keep: true to prevent automatic cleanup - the file will be cleaned up
+    // by the runner when the job completes.
+    const responseFile = tmp.fileSync({
       prefix: 'modelResponse-',
       postfix: '.txt',
+      keep: true,
     })
 
     core.setOutput('response-file', responseFile.name)
@@ -120,16 +119,6 @@ export async function run(): Promise<void> {
     }
     // Force exit to prevent hanging on open connections
     process.exit(1)
-  } finally {
-    // Explicit cleanup of temporary file if it was created
-    if (responseFile) {
-      try {
-        responseFile.removeCallback()
-      } catch (cleanupError) {
-        // Log cleanup errors but don't fail the action
-        core.warning(`Failed to cleanup temporary file: ${cleanupError}`)
-      }
-    }
   }
 
   // Force exit to prevent hanging on open connections

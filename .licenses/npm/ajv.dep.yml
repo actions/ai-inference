@@ -1,16 +1,16 @@
 ---
 name: ajv
-version: 6.12.6
+version: 8.17.1
 type: npm
 summary: Another JSON Schema Validator
-homepage: https://github.com/ajv-validator/ajv
+homepage: https://ajv.js.org
 license: mit
 licenses:
 - sources: LICENSE
   text: |+
     The MIT License (MIT)
 
-    Copyright (c) 2015-2017 Evgeny Poberezkin
+    Copyright (c) 2015-2021 Evgeny Poberezkin
 
     Permission is hereby granted, free of charge, to any person obtaining a copy
     of this software and associated documentation files (the "Software"), to deal
@@ -31,6 +31,6 @@ licenses:
     SOFTWARE.
 
 - sources: README.md
-  text: "[MIT](https://github.com/ajv-validator/ajv/blob/master/LICENSE)"
+  text: "[MIT](./LICENSE)"
 notices: []
 ...

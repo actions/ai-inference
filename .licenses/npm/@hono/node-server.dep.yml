@@ -1,0 +1,11 @@
+---
+name: "@hono/node-server"
+version: 1.19.7
+type: npm
+summary: Node.js Adapter for Hono
+homepage: https://github.com/honojs/node-server
+license: mit
+licenses:
+- sources: README.md
+  text: MIT
+notices: []

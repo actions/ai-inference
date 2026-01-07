@@ -1,16 +1,16 @@
 ---
-name: "@modelcontextprotocol/sdk"
-version: 1.25.2
+name: ajv-formats
+version: 3.0.1
 type: npm
-summary: Model Context Protocol implementation for TypeScript
-homepage: https://modelcontextprotocol.io
+summary: Format validation for Ajv v7+
+homepage: https://github.com/ajv-validator/ajv-formats#readme
 license: mit
 licenses:
 - sources: LICENSE
   text: |
     MIT License
 
-    Copyright (c) 2024 Anthropic, PBC
+    Copyright (c) 2020 Evgeny Poberezkin
 
     Permission is hereby granted, free of charge, to any person obtaining a copy
     of this software and associated documentation files (the "Software"), to deal
@@ -30,6 +30,5 @@ licenses:
     OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
     SOFTWARE.
 - sources: README.md
-  text: This project is licensed under the MIT License—see the [LICENSE](LICENSE)
-    file for details.
+  text: "[MIT](https://github.com/ajv-validator/ajv-formats/blob/master/LICENSE)"
 notices: []
