@@ -31013,14 +31013,13 @@ function safeParse$1(schema, data) {
 }
 // --- Shape extraction ---
 function getObjectShape(schema) {
-    var _a, _b;
     if (!schema)
         return undefined;
     // Zod v3 exposes `.shape`; Zod v4 keeps the shape on `_zod.def.shape`
     let rawShape;
     if (isZ4Schema(schema)) {
         const v4Schema = schema;
-        rawShape = (_b = (_a = v4Schema._zod) === null || _a === void 0 ? void 0 : _a.def) === null || _b === void 0 ? void 0 : _b.shape;
+        rawShape = v4Schema._zod?.def?.shape;
     }
     else {
         const v3Schema = schema;
@@ -31032,7 +31031,7 @@ function getObjectShape(schema) {
         try {
             return rawShape();
         }
-        catch (_c) {
+        catch {
             return undefined;
         }
     }
@@ -31044,10 +31043,9 @@ function getObjectShape(schema) {
  * Returns undefined if the schema is not a literal or the value cannot be determined.
  */
 function getLiteralValue(schema) {
-    var _a;
     if (isZ4Schema(schema)) {
         const v4Schema = schema;
-        const def = (_a = v4Schema._zod) === null || _a === void 0 ? void 0 : _a.def;
+        const def = v4Schema._zod?.def;
         if (def) {
             // Try various ways to get the literal value
             if (def.value !== undefined)
@@ -31819,8 +31817,8 @@ function number(params) {
     return _coercedNumber(ZodNumber, params);
 }
 
-const LATEST_PROTOCOL_VERSION = '2025-06-18';
-const SUPPORTED_PROTOCOL_VERSIONS = [LATEST_PROTOCOL_VERSION, '2025-03-26', '2024-11-05', '2024-10-07'];
+const LATEST_PROTOCOL_VERSION = '2025-11-25';
+const SUPPORTED_PROTOCOL_VERSIONS = [LATEST_PROTOCOL_VERSION, '2025-06-18', '2025-03-26', '2024-11-05', '2024-10-07'];
 const RELATED_TASK_META_KEY = 'io.modelcontextprotocol/related-task';
 /* JSON-RPC types */
 const JSONRPC_VERSION = '2.0';
@@ -31841,7 +31839,7 @@ const CursorSchema = string();
 /**
  * Task creation parameters, used to ask that the server create a task to represent a request.
  */
-const TaskCreationParamsSchema = looseObject({
+looseObject({
     /**
      * Time in milliseconds to keep task results available after completion.
      * If null, the task has unlimited lifetime until manually cleaned up.
@@ -31852,10 +31850,14 @@ const TaskCreationParamsSchema = looseObject({
      */
     pollInterval: number$1().optional()
 });
+const TaskMetadataSchema = object({
+    ttl: number$1().optional()
+});
 /**
- * Task association metadata, used to signal which task a message originated from.
+ * Metadata for associating messages with a task.
+ * Include this in the `_meta` field under the key `io.modelcontextprotocol/related-task`.
  */
-const RelatedTaskMetadataSchema = looseObject({
+const RelatedTaskMetadataSchema = object({
     taskId: string()
 });
 const RequestMetaSchema = looseObject({
@@ -31871,51 +31873,54 @@ const RequestMetaSchema = looseObject({
 /**
  * Common params for any request.
  */
-const BaseRequestParamsSchema = looseObject({
-    /**
-     * If specified, the caller is requesting that the receiver create a task to represent the request.
-     * Task creation parameters are now at the top level instead of in _meta.
-     */
-    task: TaskCreationParamsSchema.optional(),
+const BaseRequestParamsSchema = object({
     /**
      * See [General fields: `_meta`](/specification/draft/basic/index#meta) for notes on `_meta` usage.
      */
     _meta: RequestMetaSchema.optional()
 });
+/**
+ * Common params for any task-augmented request.
+ */
+const TaskAugmentedRequestParamsSchema = BaseRequestParamsSchema.extend({
+    /**
+     * If specified, the caller is requesting task-augmented execution for this request.
+     * The request will return a CreateTaskResult immediately, and the actual result can be
+     * retrieved later via tasks/result.
+     *
+     * Task augmentation is subject to capability negotiation - receivers MUST declare support
+     * for task augmentation of specific request types in their capabilities.
+     */
+    task: TaskMetadataSchema.optional()
+});
+/**
+ * Checks if a value is a valid TaskAugmentedRequestParams.
+ * @param value - The value to check.
+ *
+ * @returns True if the value is a valid TaskAugmentedRequestParams, false otherwise.
+ */
+const isTaskAugmentedRequestParams = (value) => TaskAugmentedRequestParamsSchema.safeParse(value).success;
 const RequestSchema = object({
     method: string(),
-    params: BaseRequestParamsSchema.optional()
+    params: BaseRequestParamsSchema.loose().optional()
 });
-const NotificationsParamsSchema = looseObject({
+const NotificationsParamsSchema = object({
     /**
      * See [MCP specification](https://github.com/modelcontextprotocol/modelcontextprotocol/blob/47339c03c143bb4ec01a26e721a1b8fe66634ebe/docs/specification/draft/basic/index.mdx#general-fields)
      * for notes on _meta usage.
      */
-    _meta: object({
-        /**
-         * If specified, this notification is related to the provided task.
-         */
-        [RELATED_TASK_META_KEY]: optional(RelatedTaskMetadataSchema)
-    })
-        .passthrough()
-        .optional()
+    _meta: RequestMetaSchema.optional()
 });
 const NotificationSchema = object({
     method: string(),
-    params: NotificationsParamsSchema.optional()
+    params: NotificationsParamsSchema.loose().optional()
 });
 const ResultSchema = looseObject({
     /**
      * See [MCP specification](https://github.com/modelcontextprotocol/modelcontextprotocol/blob/47339c03c143bb4ec01a26e721a1b8fe66634ebe/docs/specification/draft/basic/index.mdx#general-fields)
      * for notes on _meta usage.
      */
-    _meta: looseObject({
-        /**
-         * If specified, this result is related to the provided task.
-         */
-        [RELATED_TASK_META_KEY]: RelatedTaskMetadataSchema.optional()
-    })
-        .optional()
+    _meta: RequestMetaSchema.optional()
 });
 /**
  * A uniquely identifying ID for a request in JSON-RPC.
@@ -31943,13 +31948,19 @@ const isJSONRPCNotification = (value) => JSONRPCNotificationSchema.safeParse(val
 /**
  * A successful (non-error) response to a request.
  */
-const JSONRPCResponseSchema = object({
+const JSONRPCResultResponseSchema = object({
     jsonrpc: literal(JSONRPC_VERSION),
     id: RequestIdSchema,
     result: ResultSchema
 })
     .strict();
-const isJSONRPCResponse = (value) => JSONRPCResponseSchema.safeParse(value).success;
+/**
+ * Checks if a value is a valid JSONRPCResultResponse.
+ * @param value - The value to check.
+ *
+ * @returns True if the value is a valid JSONRPCResultResponse, false otherwise.
+ */
+const isJSONRPCResultResponse = (value) => JSONRPCResultResponseSchema.safeParse(value).success;
 /**
  * Error codes defined by the JSON-RPC specification.
  */
@@ -31970,9 +31981,9 @@ var ErrorCode;
 /**
  * A response to a request that indicates an error occurred.
  */
-const JSONRPCErrorSchema = object({
+const JSONRPCErrorResponseSchema = object({
     jsonrpc: literal(JSONRPC_VERSION),
-    id: RequestIdSchema,
+    id: RequestIdSchema.optional(),
     error: object({
         /**
          * The error type that occurred.
@@ -31985,12 +31996,24 @@ const JSONRPCErrorSchema = object({
         /**
          * Additional information about the error. The value of this member is defined by the sender (e.g. detailed error information, nested errors etc.).
          */
-        data: optional(unknown())
+        data: unknown().optional()
     })
 })
     .strict();
-const isJSONRPCError = (value) => JSONRPCErrorSchema.safeParse(value).success;
-const JSONRPCMessageSchema = union([JSONRPCRequestSchema, JSONRPCNotificationSchema, JSONRPCResponseSchema, JSONRPCErrorSchema]);
+/**
+ * Checks if a value is a valid JSONRPCErrorResponse.
+ * @param value - The value to check.
+ *
+ * @returns True if the value is a valid JSONRPCErrorResponse, false otherwise.
+ */
+const isJSONRPCErrorResponse = (value) => JSONRPCErrorResponseSchema.safeParse(value).success;
+const JSONRPCMessageSchema = union([
+    JSONRPCRequestSchema,
+    JSONRPCNotificationSchema,
+    JSONRPCResultResponseSchema,
+    JSONRPCErrorResponseSchema
+]);
+union([JSONRPCResultResponseSchema, JSONRPCErrorResponseSchema]);
 /* Empty result */
 /**
  * A response that indicates success but carries no data.
@@ -32002,7 +32025,7 @@ const CancelledNotificationParamsSchema = NotificationsParamsSchema.extend({
      *
      * This MUST correspond to the ID of a request previously issued in the same direction.
      */
-    requestId: RequestIdSchema,
+    requestId: RequestIdSchema.optional(),
     /**
      * An optional string describing the reason for the cancellation. This MAY be logged or presented to the user.
      */
@@ -32041,7 +32064,15 @@ const IconSchema = object({
      *
      * If not provided, the client should assume that the icon can be used at any size.
      */
-    sizes: array(string()).optional()
+    sizes: array(string()).optional(),
+    /**
+     * Optional specifier for the theme this icon is designed for. `light` indicates
+     * the icon is designed to be used with a light background, and `dark` indicates
+     * the icon is designed to be used with a dark background.
+     *
+     * If not provided, the client should assume the icon can be used with any theme.
+     */
+    theme: _enum$2(['light', 'dark']).optional()
 });
 /**
  * Base schema to add `icons` property.
@@ -32088,7 +32119,15 @@ const ImplementationSchema = BaseMetadataSchema.extend({
     /**
      * An optional URL of the website for this implementation.
      */
-    websiteUrl: string().optional()
+    websiteUrl: string().optional(),
+    /**
+     * An optional human-readable description of what this implementation does.
+     *
+     * This can be used by clients or servers to provide context about their purpose
+     * and capabilities. For example, a server might describe the types of resources
+     * or tools it provides, while a client might describe its intended use case.
+     */
+    description: string().optional()
 });
 const FormElicitationCapabilitySchema = intersection(object({
     applyDefaults: boolean().optional()
@@ -32107,64 +32146,62 @@ const ElicitationCapabilitySchema = preprocess(value => {
 /**
  * Task capabilities for clients, indicating which request types support task creation.
  */
-const ClientTasksCapabilitySchema = object({
+const ClientTasksCapabilitySchema = looseObject({
     /**
      * Present if the client supports listing tasks.
      */
-    list: optional(object({}).passthrough()),
+    list: AssertObjectSchema.optional(),
     /**
      * Present if the client supports cancelling tasks.
      */
-    cancel: optional(object({}).passthrough()),
+    cancel: AssertObjectSchema.optional(),
     /**
      * Capabilities for task creation on specific request types.
      */
-    requests: optional(object({
+    requests: looseObject({
         /**
          * Task support for sampling requests.
          */
-        sampling: optional(object({
-            createMessage: optional(object({}).passthrough())
+        sampling: looseObject({
+            createMessage: AssertObjectSchema.optional()
         })
-            .passthrough()),
+            .optional(),
         /**
          * Task support for elicitation requests.
          */
-        elicitation: optional(object({
-            create: optional(object({}).passthrough())
+        elicitation: looseObject({
+            create: AssertObjectSchema.optional()
         })
-            .passthrough())
+            .optional()
     })
-        .passthrough())
-})
-    .passthrough();
+        .optional()
+});
 /**
  * Task capabilities for servers, indicating which request types support task creation.
  */
-const ServerTasksCapabilitySchema = object({
+const ServerTasksCapabilitySchema = looseObject({
     /**
      * Present if the server supports listing tasks.
      */
-    list: optional(object({}).passthrough()),
+    list: AssertObjectSchema.optional(),
     /**
      * Present if the server supports cancelling tasks.
      */
-    cancel: optional(object({}).passthrough()),
+    cancel: AssertObjectSchema.optional(),
     /**
      * Capabilities for task creation on specific request types.
      */
-    requests: optional(object({
+    requests: looseObject({
         /**
          * Task support for tool requests.
          */
-        tools: optional(object({
-            call: optional(object({}).passthrough())
+        tools: looseObject({
+            call: AssertObjectSchema.optional()
         })
-            .passthrough())
+            .optional()
     })
-        .passthrough())
-})
-    .passthrough();
+        .optional()
+});
 /**
  * Capabilities a client may support. Known capabilities are defined here, in this schema, but this is not a closed set: any client can define its own, additional capabilities.
  */
@@ -32205,7 +32242,7 @@ const ClientCapabilitiesSchema = object({
     /**
      * Present if the client supports task creation.
      */
-    tasks: optional(ClientTasksCapabilitySchema)
+    tasks: ClientTasksCapabilitySchema.optional()
 });
 const InitializeRequestParamsSchema = BaseRequestParamsSchema.extend({
     /**
@@ -32241,12 +32278,13 @@ const ServerCapabilitiesSchema = object({
     /**
      * Present if the server offers any prompt templates.
      */
-    prompts: optional(object({
+    prompts: object({
         /**
          * Whether this server supports issuing notifications for changes to the prompt list.
          */
-        listChanged: optional(boolean())
-    })),
+        listChanged: boolean().optional()
+    })
+        .optional(),
     /**
      * Present if the server offers any resources to read.
      */
@@ -32274,9 +32312,8 @@ const ServerCapabilitiesSchema = object({
     /**
      * Present if the server supports task creation.
      */
-    tasks: optional(ServerTasksCapabilitySchema)
-})
-    .passthrough();
+    tasks: ServerTasksCapabilitySchema.optional()
+});
 /**
  * After receiving an initialize request from the client, the server sends this response.
  */
@@ -32298,7 +32335,8 @@ const InitializeResultSchema = ResultSchema.extend({
  * This notification is sent from the client to the server after initialization has finished.
  */
 const InitializedNotificationSchema = NotificationSchema.extend({
-    method: literal('notifications/initialized')
+    method: literal('notifications/initialized'),
+    params: NotificationsParamsSchema.optional()
 });
 const isInitializedNotification = (value) => InitializedNotificationSchema.safeParse(value).success;
 /* Ping */
@@ -32306,7 +32344,8 @@ const isInitializedNotification = (value) => InitializedNotificationSchema.safeP
  * A ping, issued by either the server or the client, to check that the other party is still alive. The receiver must promptly respond, or else may be disconnected.
  */
 const PingRequestSchema = RequestSchema.extend({
-    method: literal('ping')
+    method: literal('ping'),
+    params: BaseRequestParamsSchema.optional()
 });
 /* Progress notifications */
 const ProgressSchema = object({
@@ -32356,15 +32395,19 @@ const PaginatedResultSchema = ResultSchema.extend({
      * An opaque token representing the pagination position after the last returned result.
      * If present, there may be more results available.
      */
-    nextCursor: optional(CursorSchema)
+    nextCursor: CursorSchema.optional()
 });
+/**
+ * The status of a task.
+ * */
+const TaskStatusSchema = _enum$2(['working', 'input_required', 'completed', 'failed', 'cancelled']);
 /* Tasks */
 /**
  * A pollable state object associated with a request.
  */
 const TaskSchema = object({
     taskId: string(),
-    status: _enum$2(['working', 'input_required', 'completed', 'failed', 'cancelled']),
+    status: TaskStatusSchema,
     /**
      * Time in milliseconds to keep task results available after completion.
      * If null, the task has unlimited lifetime until manually cleaned up.
@@ -32423,6 +32466,13 @@ const GetTaskPayloadRequestSchema = RequestSchema.extend({
         taskId: string()
     })
 });
+/**
+ * The response to a tasks/result request.
+ * The structure matches the result type of the original request.
+ * For example, a tools/call task would return the CallToolResult structure.
+ *
+ */
+ResultSchema.loose();
 /**
  * A request to list tasks.
  */
@@ -32485,7 +32535,7 @@ const Base64Schema = string().refine(val => {
         atob(val);
         return true;
     }
-    catch (_a) {
+    catch {
         return false;
     }
 }, { message: 'Invalid Base64 string' });
@@ -32494,6 +32544,27 @@ const BlobResourceContentsSchema = ResourceContentsSchema.extend({
      * A base64-encoded string representing the binary data of the item.
      */
     blob: Base64Schema
+});
+/**
+ * The sender or recipient of messages and data in a conversation.
+ */
+const RoleSchema = _enum$2(['user', 'assistant']);
+/**
+ * Optional annotations providing clients additional context about a resource.
+ */
+const AnnotationsSchema = object({
+    /**
+     * Intended audience(s) for the resource.
+     */
+    audience: array(RoleSchema).optional(),
+    /**
+     * Importance hint for the resource, from 0 (least) to 1 (most).
+     */
+    priority: number$1().min(0).max(1).optional(),
+    /**
+     * ISO 8601 timestamp for the most recent modification.
+     */
+    lastModified: datetime({ offset: true }).optional()
 });
 /**
  * A known resource that the server is capable of reading.
@@ -32515,6 +32586,10 @@ const ResourceSchema = object({
      * The MIME type of this resource, if known.
      */
     mimeType: optional(string()),
+    /**
+     * Optional annotations for the client.
+     */
+    annotations: AnnotationsSchema.optional(),
     /**
      * See [MCP specification](https://github.com/modelcontextprotocol/modelcontextprotocol/blob/47339c03c143bb4ec01a26e721a1b8fe66634ebe/docs/specification/draft/basic/index.mdx#general-fields)
      * for notes on _meta usage.
@@ -32541,6 +32616,10 @@ const ResourceTemplateSchema = object({
      * The MIME type for all resources that match this template. This should only be included if all resources matching this template have the same type.
      */
     mimeType: optional(string()),
+    /**
+     * Optional annotations for the client.
+     */
+    annotations: AnnotationsSchema.optional(),
     /**
      * See [MCP specification](https://github.com/modelcontextprotocol/modelcontextprotocol/blob/47339c03c143bb4ec01a26e721a1b8fe66634ebe/docs/specification/draft/basic/index.mdx#general-fields)
      * for notes on _meta usage.
@@ -32600,7 +32679,8 @@ const ReadResourceResultSchema = ResultSchema.extend({
  * An optional notification from the server to the client, informing it that the list of resources it can read from has changed. This may be issued by servers without any previous subscription from the client.
  */
 const ResourceListChangedNotificationSchema = NotificationSchema.extend({
-    method: literal('notifications/resources/list_changed')
+    method: literal('notifications/resources/list_changed'),
+    params: NotificationsParamsSchema.optional()
 });
 const SubscribeRequestParamsSchema = ResourceRequestParamsSchema;
 /**
@@ -32714,6 +32794,10 @@ const TextContentSchema = object({
      */
     text: string(),
     /**
+     * Optional annotations for the client.
+     */
+    annotations: AnnotationsSchema.optional(),
+    /**
      * See [MCP specification](https://github.com/modelcontextprotocol/modelcontextprotocol/blob/47339c03c143bb4ec01a26e721a1b8fe66634ebe/docs/specification/draft/basic/index.mdx#general-fields)
      * for notes on _meta usage.
      */
@@ -32733,6 +32817,10 @@ const ImageContentSchema = object({
      */
     mimeType: string(),
     /**
+     * Optional annotations for the client.
+     */
+    annotations: AnnotationsSchema.optional(),
+    /**
      * See [MCP specification](https://github.com/modelcontextprotocol/modelcontextprotocol/blob/47339c03c143bb4ec01a26e721a1b8fe66634ebe/docs/specification/draft/basic/index.mdx#general-fields)
      * for notes on _meta usage.
      */
@@ -32751,6 +32839,10 @@ const AudioContentSchema = object({
      * The MIME type of the audio. Different providers may support different audio types.
      */
     mimeType: string(),
+    /**
+     * Optional annotations for the client.
+     */
+    annotations: AnnotationsSchema.optional(),
     /**
      * See [MCP specification](https://github.com/modelcontextprotocol/modelcontextprotocol/blob/47339c03c143bb4ec01a26e721a1b8fe66634ebe/docs/specification/draft/basic/index.mdx#general-fields)
      * for notes on _meta usage.
@@ -32777,20 +32869,23 @@ const ToolUseContentSchema = object({
      * Arguments to pass to the tool.
      * Must conform to the tool's inputSchema.
      */
-    input: object({}).passthrough(),
+    input: record(string(), unknown()),
     /**
      * See [MCP specification](https://github.com/modelcontextprotocol/modelcontextprotocol/blob/47339c03c143bb4ec01a26e721a1b8fe66634ebe/docs/specification/draft/basic/index.mdx#general-fields)
      * for notes on _meta usage.
      */
-    _meta: optional(object({}).passthrough())
-})
-    .passthrough();
+    _meta: record(string(), unknown()).optional()
+});
 /**
  * The contents of a resource, embedded into a prompt or tool call result.
  */
 const EmbeddedResourceSchema = object({
     type: literal('resource'),
     resource: union([TextResourceContentsSchema, BlobResourceContentsSchema]),
+    /**
+     * Optional annotations for the client.
+     */
+    annotations: AnnotationsSchema.optional(),
     /**
      * See [MCP specification](https://github.com/modelcontextprotocol/modelcontextprotocol/blob/47339c03c143bb4ec01a26e721a1b8fe66634ebe/docs/specification/draft/basic/index.mdx#general-fields)
      * for notes on _meta usage.
@@ -32819,7 +32914,7 @@ const ContentBlockSchema = union([
  * Describes a message returned as part of a prompt.
  */
 const PromptMessageSchema = object({
-    role: _enum$2(['user', 'assistant']),
+    role: RoleSchema,
     content: ContentBlockSchema
 });
 /**
@@ -32829,14 +32924,15 @@ const GetPromptResultSchema = ResultSchema.extend({
     /**
      * An optional description for the prompt.
      */
-    description: optional(string()),
+    description: string().optional(),
     messages: array(PromptMessageSchema)
 });
 /**
  * An optional notification from the server to the client, informing it that the list of prompts it offers has changed. This may be issued by servers without any previous subscription from the client.
  */
 const PromptListChangedNotificationSchema = NotificationSchema.extend({
-    method: literal('notifications/prompts/list_changed')
+    method: literal('notifications/prompts/list_changed'),
+    params: NotificationsParamsSchema.optional()
 });
 /* Tools */
 /**
@@ -32937,11 +33033,11 @@ const ToolSchema = object({
     /**
      * Optional additional tool information.
      */
-    annotations: optional(ToolAnnotationsSchema),
+    annotations: ToolAnnotationsSchema.optional(),
     /**
      * Execution-related properties for this tool.
      */
-    execution: optional(ToolExecutionSchema),
+    execution: ToolExecutionSchema.optional(),
     /**
      * See [MCP specification](https://github.com/modelcontextprotocol/modelcontextprotocol/blob/47339c03c143bb4ec01a26e721a1b8fe66634ebe/docs/specification/draft/basic/index.mdx#general-fields)
      * for notes on _meta usage.
@@ -32991,7 +33087,7 @@ const CallToolResultSchema = ResultSchema.extend({
      * server does not support tool calls, or any other exceptional conditions,
      * should be reported as an MCP error response.
      */
-    isError: optional(boolean())
+    isError: boolean().optional()
 });
 /**
  * CallToolResultSchema extended with backwards compatibility to protocol version 2024-10-07.
@@ -33002,7 +33098,7 @@ CallToolResultSchema.or(ResultSchema.extend({
 /**
  * Parameters for a `tools/call` request.
  */
-const CallToolRequestParamsSchema = BaseRequestParamsSchema.extend({
+const CallToolRequestParamsSchema = TaskAugmentedRequestParamsSchema.extend({
     /**
      * The name of the tool to call.
      */
@@ -33010,7 +33106,7 @@ const CallToolRequestParamsSchema = BaseRequestParamsSchema.extend({
     /**
      * Arguments to pass to the tool.
      */
-    arguments: optional(record(string(), unknown()))
+    arguments: record(string(), unknown()).optional()
 });
 /**
  * Used by the client to invoke a tool provided by the server.
@@ -33023,7 +33119,32 @@ const CallToolRequestSchema = RequestSchema.extend({
  * An optional notification from the server to the client, informing it that the list of tools it offers has changed. This may be issued by servers without any previous subscription from the client.
  */
 const ToolListChangedNotificationSchema = NotificationSchema.extend({
-    method: literal('notifications/tools/list_changed')
+    method: literal('notifications/tools/list_changed'),
+    params: NotificationsParamsSchema.optional()
+});
+/**
+ * Base schema for list changed subscription options (without callback).
+ * Used internally for Zod validation of autoRefresh and debounceMs.
+ */
+const ListChangedOptionsBaseSchema = object({
+    /**
+     * If true, the list will be refreshed automatically when a list changed notification is received.
+     * The callback will be called with the updated list.
+     *
+     * If false, the callback will be called with null items, allowing manual refresh.
+     *
+     * @default true
+     */
+    autoRefresh: boolean().default(true),
+    /**
+     * Debounce time in milliseconds for list changed notification processing.
+     *
+     * Multiple notifications received within this timeframe will only trigger one refresh.
+     * Set to 0 to disable debouncing.
+     *
+     * @default 300
+     */
+    debounceMs: number$1().int().nonnegative().default(300)
 });
 /* Logging */
 /**
@@ -33087,19 +33208,19 @@ const ModelPreferencesSchema = object({
     /**
      * Optional hints to use for model selection.
      */
-    hints: optional(array(ModelHintSchema)),
+    hints: array(ModelHintSchema).optional(),
     /**
      * How much to prioritize cost when selecting a model.
      */
-    costPriority: optional(number$1().min(0).max(1)),
+    costPriority: number$1().min(0).max(1).optional(),
     /**
      * How much to prioritize sampling speed (latency) when selecting a model.
      */
-    speedPriority: optional(number$1().min(0).max(1)),
+    speedPriority: number$1().min(0).max(1).optional(),
     /**
      * How much to prioritize intelligence and capabilities when selecting a model.
      */
-    intelligencePriority: optional(number$1().min(0).max(1))
+    intelligencePriority: number$1().min(0).max(1).optional()
 });
 /**
  * Controls tool usage behavior in sampling requests.
@@ -33111,7 +33232,7 @@ const ToolChoiceSchema = object({
      * - "required": Model MUST use at least one tool before completing
      * - "none": Model MUST NOT use any tools
      */
-    mode: optional(_enum$2(['auto', 'required', 'none']))
+    mode: _enum$2(['auto', 'required', 'none']).optional()
 });
 /**
  * The result of a tool execution, provided by the user (server).
@@ -33121,15 +33242,14 @@ const ToolResultContentSchema = object({
     type: literal('tool_result'),
     toolUseId: string().describe('The unique identifier for the corresponding tool call.'),
     content: array(ContentBlockSchema).default([]),
-    structuredContent: object({}).passthrough().optional(),
-    isError: optional(boolean()),
+    structuredContent: object({}).loose().optional(),
+    isError: boolean().optional(),
     /**
      * See [MCP specification](https://github.com/modelcontextprotocol/modelcontextprotocol/blob/47339c03c143bb4ec01a26e721a1b8fe66634ebe/docs/specification/draft/basic/index.mdx#general-fields)
      * for notes on _meta usage.
      */
-    _meta: optional(object({}).passthrough())
-})
-    .passthrough();
+    _meta: record(string(), unknown()).optional()
+});
 /**
  * Basic content types for sampling responses (without tool use).
  * Used for backwards-compatible CreateMessageResult when tools are not used.
@@ -33150,19 +33270,18 @@ const SamplingMessageContentBlockSchema = discriminatedUnion('type', [
  * Describes a message issued to or received from an LLM API.
  */
 const SamplingMessageSchema = object({
-    role: _enum$2(['user', 'assistant']),
+    role: RoleSchema,
     content: union([SamplingMessageContentBlockSchema, array(SamplingMessageContentBlockSchema)]),
     /**
      * See [MCP specification](https://github.com/modelcontextprotocol/modelcontextprotocol/blob/47339c03c143bb4ec01a26e721a1b8fe66634ebe/docs/specification/draft/basic/index.mdx#general-fields)
      * for notes on _meta usage.
      */
-    _meta: optional(object({}).passthrough())
-})
-    .passthrough();
+    _meta: record(string(), unknown()).optional()
+});
 /**
  * Parameters for a `sampling/createMessage` request.
  */
-const CreateMessageRequestParamsSchema = BaseRequestParamsSchema.extend({
+const CreateMessageRequestParamsSchema = TaskAugmentedRequestParamsSchema.extend({
     messages: array(SamplingMessageSchema),
     /**
      * The server's preferences for which model to select. The client MAY modify or omit this request.
@@ -33196,13 +33315,13 @@ const CreateMessageRequestParamsSchema = BaseRequestParamsSchema.extend({
      * Tools that the model may use during generation.
      * The client MUST return an error if this field is provided but ClientCapabilities.sampling.tools is not declared.
      */
-    tools: optional(array(ToolSchema)),
+    tools: array(ToolSchema).optional(),
     /**
      * Controls how the model uses tools.
      * The client MUST return an error if this field is provided but ClientCapabilities.sampling.tools is not declared.
      * Default is `{ mode: "auto" }`.
      */
-    toolChoice: optional(ToolChoiceSchema)
+    toolChoice: ToolChoiceSchema.optional()
 });
 /**
  * A request from the server to sample an LLM via the client. The client has full discretion over which model to select. The client should also inform the user before beginning sampling, to allow them to inspect the request (human in the loop) and decide whether to approve it.
@@ -33232,7 +33351,7 @@ const CreateMessageResultSchema = ResultSchema.extend({
      * This field is an open string to allow for provider-specific stop reasons.
      */
     stopReason: optional(_enum$2(['endTurn', 'stopSequence', 'maxTokens']).or(string())),
-    role: _enum$2(['user', 'assistant']),
+    role: RoleSchema,
     /**
      * Response content. Single content block (text, image, or audio).
      */
@@ -33259,7 +33378,7 @@ const CreateMessageResultWithToolsSchema = ResultSchema.extend({
      * This field is an open string to allow for provider-specific stop reasons.
      */
     stopReason: optional(_enum$2(['endTurn', 'stopSequence', 'maxTokens', 'toolUse']).or(string())),
-    role: _enum$2(['user', 'assistant']),
+    role: RoleSchema,
     /**
      * Response content. May be a single block or array. May include ToolUseContent if stopReason is "toolUse".
      */
@@ -33382,7 +33501,7 @@ const PrimitiveSchemaDefinitionSchema = union([EnumSchemaSchema, BooleanSchemaSc
 /**
  * Parameters for an `elicitation/create` request for form-based elicitation.
  */
-const ElicitRequestFormParamsSchema = BaseRequestParamsSchema.extend({
+const ElicitRequestFormParamsSchema = TaskAugmentedRequestParamsSchema.extend({
     /**
      * The elicitation mode.
      *
@@ -33406,7 +33525,7 @@ const ElicitRequestFormParamsSchema = BaseRequestParamsSchema.extend({
 /**
  * Parameters for an `elicitation/create` request for URL-based elicitation.
  */
-const ElicitRequestURLParamsSchema = BaseRequestParamsSchema.extend({
+const ElicitRequestURLParamsSchema = TaskAugmentedRequestParamsSchema.extend({
     /**
      * The elicitation mode.
      */
@@ -33573,7 +33692,8 @@ const RootSchema = object({
  * Sent from the server to request a list of root URIs from the client.
  */
 const ListRootsRequestSchema = RequestSchema.extend({
-    method: literal('roots/list')
+    method: literal('roots/list'),
+    params: BaseRequestParamsSchema.optional()
 });
 /**
  * The client's response to a roots/list request from the server.
@@ -33585,7 +33705,8 @@ const ListRootsResultSchema = ResultSchema.extend({
  * A notification from the client to the server, informing it that the list of roots has changed.
  */
 const RootsListChangedNotificationSchema = NotificationSchema.extend({
-    method: literal('notifications/roots/list_changed')
+    method: literal('notifications/roots/list_changed'),
+    params: NotificationsParamsSchema.optional()
 });
 /* Client messages */
 union([
@@ -33604,7 +33725,8 @@ union([
     ListToolsRequestSchema,
     GetTaskRequestSchema,
     GetTaskPayloadRequestSchema,
-    ListTasksRequestSchema
+    ListTasksRequestSchema,
+    CancelTaskRequestSchema
 ]);
 union([
     CancelledNotificationSchema,
@@ -33631,7 +33753,8 @@ union([
     ListRootsRequestSchema,
     GetTaskRequestSchema,
     GetTaskPayloadRequestSchema,
-    ListTasksRequestSchema
+    ListTasksRequestSchema,
+    CancelTaskRequestSchema
 ]);
 union([
     CancelledNotificationSchema,
@@ -33692,8 +33815,7 @@ class UrlElicitationRequiredError extends McpError {
         });
     }
     get elicitations() {
-        var _a, _b;
-        return (_b = (_a = this.data) === null || _a === void 0 ? void 0 : _a.elicitations) !== null && _b !== void 0 ? _b : [];
+        return this.data?.elicitations ?? [];
     }
 }
 
@@ -33722,7 +33844,7 @@ new Set("ABCDEFGHIJKLMNOPQRSTUVXYZabcdefghijklmnopqrstuvxyz0123456789");
 // ----------------------------------------------------
 function getMethodLiteral(schema) {
     const shape = getObjectShape(schema);
-    const methodSchema = shape === null || shape === void 0 ? void 0 : shape.method;
+    const methodSchema = shape?.method;
     if (!methodSchema) {
         throw new Error('Schema is missing a method literal');
     }
@@ -33772,8 +33894,8 @@ class Protocol {
         // Automatic pong by default.
         _request => ({}));
         // Install task handlers if TaskStore is provided
-        this._taskStore = _options === null || _options === void 0 ? void 0 : _options.taskStore;
-        this._taskMessageQueue = _options === null || _options === void 0 ? void 0 : _options.taskMessageQueue;
+        this._taskStore = _options?.taskStore;
+        this._taskMessageQueue = _options?.taskMessageQueue;
         if (this._taskStore) {
             this.setRequestHandler(GetTaskRequestSchema, async (request, extra) => {
                 const task = await this._taskStore.getTask(request.params.taskId, extra.sessionId);
@@ -33789,7 +33911,6 @@ class Protocol {
             });
             this.setRequestHandler(GetTaskPayloadRequestSchema, async (request, extra) => {
                 const handleTaskResult = async () => {
-                    var _a;
                     const taskId = request.params.taskId;
                     // Deliver queued messages
                     if (this._taskMessageQueue) {
@@ -33825,7 +33946,7 @@ class Protocol {
                             }
                             // Send the message on the response stream by passing the relatedRequestId
                             // This tells the transport to write the message to the tasks/result response stream
-                            await ((_a = this._transport) === null || _a === void 0 ? void 0 : _a.send(queuedMessage.message, { relatedRequestId: extra.requestId }));
+                            await this._transport?.send(queuedMessage.message, { relatedRequestId: extra.requestId });
                         }
                     }
                     // Now check task status
@@ -33859,9 +33980,8 @@ class Protocol {
                 return await handleTaskResult();
             });
             this.setRequestHandler(ListTasksRequestSchema, async (request, extra) => {
-                var _a;
                 try {
-                    const { tasks, nextCursor } = await this._taskStore.listTasks((_a = request.params) === null || _a === void 0 ? void 0 : _a.cursor, extra.sessionId);
+                    const { tasks, nextCursor } = await this._taskStore.listTasks(request.params?.cursor, extra.sessionId);
                     // @ts-expect-error SendResultT cannot contain ListTasksResult, but we include it in our derived types everywhere else
                     return {
                         tasks,
@@ -33907,9 +34027,12 @@ class Protocol {
         }
     }
     async _oncancel(notification) {
+        if (!notification.params.requestId) {
+            return;
+        }
         // Handle request cancellation
         const controller = this._requestHandlerAbortControllers.get(notification.params.requestId);
-        controller === null || controller === void 0 ? void 0 : controller.abort(notification.params.reason);
+        controller?.abort(notification.params.reason);
     }
     _setupTimeout(messageId, timeout, maxTotalTimeout, onTimeout, resetTimeoutOnProgress = false) {
         this._timeoutInfo.set(messageId, {
@@ -33950,22 +34073,21 @@ class Protocol {
      * The Protocol object assumes ownership of the Transport, replacing any callbacks that have already been set, and expects that it is the only user of the Transport instance going forward.
      */
     async connect(transport) {
-        var _a, _b, _c;
         this._transport = transport;
-        const _onclose = (_a = this.transport) === null || _a === void 0 ? void 0 : _a.onclose;
+        const _onclose = this.transport?.onclose;
         this._transport.onclose = () => {
-            _onclose === null || _onclose === void 0 ? void 0 : _onclose();
+            _onclose?.();
             this._onclose();
         };
-        const _onerror = (_b = this.transport) === null || _b === void 0 ? void 0 : _b.onerror;
+        const _onerror = this.transport?.onerror;
         this._transport.onerror = (error) => {
-            _onerror === null || _onerror === void 0 ? void 0 : _onerror(error);
+            _onerror?.(error);
             this._onerror(error);
         };
-        const _onmessage = (_c = this._transport) === null || _c === void 0 ? void 0 : _c.onmessage;
+        const _onmessage = this._transport?.onmessage;
         this._transport.onmessage = (message, extra) => {
-            _onmessage === null || _onmessage === void 0 ? void 0 : _onmessage(message, extra);
-            if (isJSONRPCResponse(message) || isJSONRPCError(message)) {
+            _onmessage?.(message, extra);
+            if (isJSONRPCResultResponse(message) || isJSONRPCErrorResponse(message)) {
                 this._onresponse(message);
             }
             else if (isJSONRPCRequest(message)) {
@@ -33981,7 +34103,6 @@ class Protocol {
         await this._transport.start();
     }
     _onclose() {
-        var _a;
         const responseHandlers = this._responseHandlers;
         this._responseHandlers = new Map();
         this._progressHandlers.clear();
@@ -33989,18 +34110,16 @@ class Protocol {
         this._pendingDebouncedNotifications.clear();
         const error = McpError.fromError(ErrorCode.ConnectionClosed, 'Connection closed');
         this._transport = undefined;
-        (_a = this.onclose) === null || _a === void 0 ? void 0 : _a.call(this);
+        this.onclose?.();
         for (const handler of responseHandlers.values()) {
             handler(error);
         }
     }
     _onerror(error) {
-        var _a;
-        (_a = this.onerror) === null || _a === void 0 ? void 0 : _a.call(this, error);
+        this.onerror?.(error);
     }
     _onnotification(notification) {
-        var _a;
-        const handler = (_a = this._notificationHandlers.get(notification.method)) !== null && _a !== void 0 ? _a : this.fallbackNotificationHandler;
+        const handler = this._notificationHandlers.get(notification.method) ?? this.fallbackNotificationHandler;
         // Ignore notifications not being subscribed to.
         if (handler === undefined) {
             return;
@@ -34011,12 +34130,11 @@ class Protocol {
             .catch(error => this._onerror(new Error(`Uncaught error in notification handler: ${error}`)));
     }
     _onrequest(request, extra) {
-        var _a, _b, _c, _d, _e, _f;
-        const handler = (_a = this._requestHandlers.get(request.method)) !== null && _a !== void 0 ? _a : this.fallbackRequestHandler;
+        const handler = this._requestHandlers.get(request.method) ?? this.fallbackRequestHandler;
         // Capture the current transport at request time to ensure responses go to the correct client
         const capturedTransport = this._transport;
         // Extract taskId from request metadata if present (needed early for method not found case)
-        const relatedTaskId = (_d = (_c = (_b = request.params) === null || _b === void 0 ? void 0 : _b._meta) === null || _c === void 0 ? void 0 : _c[RELATED_TASK_META_KEY]) === null || _d === void 0 ? void 0 : _d.taskId;
+        const relatedTaskId = request.params?._meta?.[RELATED_TASK_META_KEY]?.taskId;
         if (handler === undefined) {
             const errorResponse = {
                 jsonrpc: '2.0',
@@ -34032,21 +34150,23 @@ class Protocol {
                     type: 'error',
                     message: errorResponse,
                     timestamp: Date.now()
-                }, capturedTransport === null || capturedTransport === void 0 ? void 0 : capturedTransport.sessionId).catch(error => this._onerror(new Error(`Failed to enqueue error response: ${error}`)));
+                }, capturedTransport?.sessionId).catch(error => this._onerror(new Error(`Failed to enqueue error response: ${error}`)));
             }
             else {
-                capturedTransport === null || capturedTransport === void 0 ? void 0 : capturedTransport.send(errorResponse).catch(error => this._onerror(new Error(`Failed to send an error response: ${error}`)));
+                capturedTransport
+                    ?.send(errorResponse)
+                    .catch(error => this._onerror(new Error(`Failed to send an error response: ${error}`)));
             }
             return;
         }
         const abortController = new AbortController();
         this._requestHandlerAbortControllers.set(request.id, abortController);
-        const taskCreationParams = (_e = request.params) === null || _e === void 0 ? void 0 : _e.task;
-        const taskStore = this._taskStore ? this.requestTaskStore(request, capturedTransport === null || capturedTransport === void 0 ? void 0 : capturedTransport.sessionId) : undefined;
+        const taskCreationParams = isTaskAugmentedRequestParams(request.params) ? request.params.task : undefined;
+        const taskStore = this._taskStore ? this.requestTaskStore(request, capturedTransport?.sessionId) : undefined;
         const fullExtra = {
             signal: abortController.signal,
-            sessionId: capturedTransport === null || capturedTransport === void 0 ? void 0 : capturedTransport.sessionId,
-            _meta: (_f = request.params) === null || _f === void 0 ? void 0 : _f._meta,
+            sessionId: capturedTransport?.sessionId,
+            _meta: request.params?._meta,
             sendNotification: async (notification) => {
                 // Include related-task metadata if this request is part of a task
                 const notificationOptions = { relatedRequestId: request.id };
@@ -34056,7 +34176,6 @@ class Protocol {
                 await this.notification(notification, notificationOptions);
             },
             sendRequest: async (r, resultSchema, options) => {
-                var _a, _b;
                 // Include related-task metadata if this request is part of a task
                 const requestOptions = { ...options, relatedRequestId: request.id };
                 if (relatedTaskId && !requestOptions.relatedTask) {
@@ -34064,20 +34183,20 @@ class Protocol {
                 }
                 // Set task status to input_required when sending a request within a task context
                 // Use the taskId from options (explicit) or fall back to relatedTaskId (inherited)
-                const effectiveTaskId = (_b = (_a = requestOptions.relatedTask) === null || _a === void 0 ? void 0 : _a.taskId) !== null && _b !== void 0 ? _b : relatedTaskId;
+                const effectiveTaskId = requestOptions.relatedTask?.taskId ?? relatedTaskId;
                 if (effectiveTaskId && taskStore) {
                     await taskStore.updateTaskStatus(effectiveTaskId, 'input_required');
                 }
                 return await this.request(r, resultSchema, requestOptions);
             },
-            authInfo: extra === null || extra === void 0 ? void 0 : extra.authInfo,
+            authInfo: extra?.authInfo,
             requestId: request.id,
-            requestInfo: extra === null || extra === void 0 ? void 0 : extra.requestInfo,
+            requestInfo: extra?.requestInfo,
             taskId: relatedTaskId,
             taskStore: taskStore,
-            taskRequestedTtl: taskCreationParams === null || taskCreationParams === void 0 ? void 0 : taskCreationParams.ttl,
-            closeSSEStream: extra === null || extra === void 0 ? void 0 : extra.closeSSEStream,
-            closeStandaloneSSEStream: extra === null || extra === void 0 ? void 0 : extra.closeStandaloneSSEStream
+            taskRequestedTtl: taskCreationParams?.ttl,
+            closeSSEStream: extra?.closeSSEStream,
+            closeStandaloneSSEStream: extra?.closeStandaloneSSEStream
         };
         // Starting with Promise.resolve() puts any synchronous errors into the monad as well.
         Promise.resolve()
@@ -34105,13 +34224,12 @@ class Protocol {
                     type: 'response',
                     message: response,
                     timestamp: Date.now()
-                }, capturedTransport === null || capturedTransport === void 0 ? void 0 : capturedTransport.sessionId);
+                }, capturedTransport?.sessionId);
             }
             else {
-                await (capturedTransport === null || capturedTransport === void 0 ? void 0 : capturedTransport.send(response));
+                await capturedTransport?.send(response);
             }
         }, async (error) => {
-            var _a;
             if (abortController.signal.aborted) {
                 // Request was cancelled
                 return;
@@ -34121,7 +34239,7 @@ class Protocol {
                 id: request.id,
                 error: {
                     code: Number.isSafeInteger(error['code']) ? error['code'] : ErrorCode.InternalError,
-                    message: (_a = error.message) !== null && _a !== void 0 ? _a : 'Internal error',
+                    message: error.message ?? 'Internal error',
                     ...(error['data'] !== undefined && { data: error['data'] })
                 }
             };
@@ -34131,10 +34249,10 @@ class Protocol {
                     type: 'error',
                     message: errorResponse,
                     timestamp: Date.now()
-                }, capturedTransport === null || capturedTransport === void 0 ? void 0 : capturedTransport.sessionId);
+                }, capturedTransport?.sessionId);
             }
             else {
-                await (capturedTransport === null || capturedTransport === void 0 ? void 0 : capturedTransport.send(errorResponse));
+                await capturedTransport?.send(errorResponse);
             }
         })
             .catch(error => this._onerror(new Error(`Failed to send response: ${error}`)))
@@ -34173,7 +34291,7 @@ class Protocol {
         const resolver = this._requestResolvers.get(messageId);
         if (resolver) {
             this._requestResolvers.delete(messageId);
-            if (isJSONRPCResponse(response)) {
+            if (isJSONRPCResultResponse(response)) {
                 resolver(response);
             }
             else {
@@ -34191,7 +34309,7 @@ class Protocol {
         this._cleanupTimeout(messageId);
         // Keep progress handler alive for CreateTaskResult responses
         let isTaskResponse = false;
-        if (isJSONRPCResponse(response) && response.result && typeof response.result === 'object') {
+        if (isJSONRPCResultResponse(response) && response.result && typeof response.result === 'object') {
             const result = response.result;
             if (result.task && typeof result.task === 'object') {
                 const task = result.task;
@@ -34204,7 +34322,7 @@ class Protocol {
         if (!isTaskResponse) {
             this._progressHandlers.delete(messageId);
         }
-        if (isJSONRPCResponse(response)) {
+        if (isJSONRPCResultResponse(response)) {
             handler(response);
         }
         else {
@@ -34219,8 +34337,7 @@ class Protocol {
      * Closes the connection.
      */
     async close() {
-        var _a;
-        await ((_a = this._transport) === null || _a === void 0 ? void 0 : _a.close());
+        await this._transport?.close();
     }
     /**
      * Sends a request and returns an AsyncGenerator that yields response messages.
@@ -34250,8 +34367,7 @@ class Protocol {
      * @experimental Use `client.experimental.tasks.requestStream()` to access this method.
      */
     async *requestStream(request, resultSchema, options) {
-        var _a, _b, _c, _d;
-        const { task } = options !== null && options !== void 0 ? options : {};
+        const { task } = options ?? {};
         // For non-task requests, just yield the result
         if (!task) {
             try {
@@ -34314,10 +34430,10 @@ class Protocol {
                     return;
                 }
                 // Wait before polling again
-                const pollInterval = (_c = (_a = task.pollInterval) !== null && _a !== void 0 ? _a : (_b = this._options) === null || _b === void 0 ? void 0 : _b.defaultTaskPollInterval) !== null && _c !== void 0 ? _c : 1000;
+                const pollInterval = task.pollInterval ?? this._options?.defaultTaskPollInterval ?? 1000;
                 await new Promise(resolve => setTimeout(resolve, pollInterval));
                 // Check if cancelled
-                (_d = options === null || options === void 0 ? void 0 : options.signal) === null || _d === void 0 ? void 0 : _d.throwIfAborted();
+                options?.signal?.throwIfAborted();
             }
         }
         catch (error) {
@@ -34333,10 +34449,9 @@ class Protocol {
      * Do not use this method to emit notifications! Use notification() instead.
      */
     request(request, resultSchema, options) {
-        const { relatedRequestId, resumptionToken, onresumptiontoken, task, relatedTask } = options !== null && options !== void 0 ? options : {};
+        const { relatedRequestId, resumptionToken, onresumptiontoken, task, relatedTask } = options ?? {};
         // Send the request
         return new Promise((resolve, reject) => {
-            var _a, _b, _c, _d, _e, _f, _g;
             const earlyReject = (error) => {
                 reject(error);
             };
@@ -34344,7 +34459,7 @@ class Protocol {
                 earlyReject(new Error('Not connected'));
                 return;
             }
-            if (((_a = this._options) === null || _a === void 0 ? void 0 : _a.enforceStrictCapabilities) === true) {
+            if (this._options?.enforceStrictCapabilities === true) {
                 try {
                     this.assertCapabilityForMethod(request.method);
                     // If task creation is requested, also check task capabilities
@@ -34357,19 +34472,19 @@ class Protocol {
                     return;
                 }
             }
-            (_b = options === null || options === void 0 ? void 0 : options.signal) === null || _b === void 0 ? void 0 : _b.throwIfAborted();
+            options?.signal?.throwIfAborted();
             const messageId = this._requestMessageId++;
             const jsonrpcRequest = {
                 ...request,
                 jsonrpc: '2.0',
                 id: messageId
             };
-            if (options === null || options === void 0 ? void 0 : options.onprogress) {
+            if (options?.onprogress) {
                 this._progressHandlers.set(messageId, options.onprogress);
                 jsonrpcRequest.params = {
                     ...request.params,
                     _meta: {
-                        ...(((_c = request.params) === null || _c === void 0 ? void 0 : _c._meta) || {}),
+                        ...(request.params?._meta || {}),
                         progressToken: messageId
                     }
                 };
@@ -34386,31 +34501,31 @@ class Protocol {
                 jsonrpcRequest.params = {
                     ...jsonrpcRequest.params,
                     _meta: {
-                        ...(((_d = jsonrpcRequest.params) === null || _d === void 0 ? void 0 : _d._meta) || {}),
+                        ...(jsonrpcRequest.params?._meta || {}),
                         [RELATED_TASK_META_KEY]: relatedTask
                     }
                 };
             }
             const cancel = (reason) => {
-                var _a;
                 this._responseHandlers.delete(messageId);
                 this._progressHandlers.delete(messageId);
                 this._cleanupTimeout(messageId);
-                (_a = this._transport) === null || _a === void 0 ? void 0 : _a.send({
+                this._transport
+                    ?.send({
                     jsonrpc: '2.0',
                     method: 'notifications/cancelled',
                     params: {
                         requestId: messageId,
                         reason: String(reason)
                     }
-                }, { relatedRequestId, resumptionToken, onresumptiontoken }).catch(error => this._onerror(new Error(`Failed to send cancellation: ${error}`)));
+                }, { relatedRequestId, resumptionToken, onresumptiontoken })
+                    .catch(error => this._onerror(new Error(`Failed to send cancellation: ${error}`)));
                 // Wrap the reason in an McpError if it isn't already
                 const error = reason instanceof McpError ? reason : new McpError(ErrorCode.RequestTimeout, String(reason));
                 reject(error);
             };
             this._responseHandlers.set(messageId, response => {
-                var _a;
-                if ((_a = options === null || options === void 0 ? void 0 : options.signal) === null || _a === void 0 ? void 0 : _a.aborted) {
+                if (options?.signal?.aborted) {
                     return;
                 }
                 if (response instanceof Error) {
@@ -34430,15 +34545,14 @@ class Protocol {
                     reject(error);
                 }
             });
-            (_e = options === null || options === void 0 ? void 0 : options.signal) === null || _e === void 0 ? void 0 : _e.addEventListener('abort', () => {
-                var _a;
-                cancel((_a = options === null || options === void 0 ? void 0 : options.signal) === null || _a === void 0 ? void 0 : _a.reason);
+            options?.signal?.addEventListener('abort', () => {
+                cancel(options?.signal?.reason);
             });
-            const timeout = (_f = options === null || options === void 0 ? void 0 : options.timeout) !== null && _f !== void 0 ? _f : DEFAULT_REQUEST_TIMEOUT_MSEC;
+            const timeout = options?.timeout ?? DEFAULT_REQUEST_TIMEOUT_MSEC;
             const timeoutHandler = () => cancel(McpError.fromError(ErrorCode.RequestTimeout, 'Request timed out', { timeout }));
-            this._setupTimeout(messageId, timeout, options === null || options === void 0 ? void 0 : options.maxTotalTimeout, timeoutHandler, (_g = options === null || options === void 0 ? void 0 : options.resetTimeoutOnProgress) !== null && _g !== void 0 ? _g : false);
+            this._setupTimeout(messageId, timeout, options?.maxTotalTimeout, timeoutHandler, options?.resetTimeoutOnProgress ?? false);
             // Queue request if related to a task
-            const relatedTaskId = relatedTask === null || relatedTask === void 0 ? void 0 : relatedTask.taskId;
+            const relatedTaskId = relatedTask?.taskId;
             if (relatedTaskId) {
                 // Store the response resolver for this request so responses can be routed back
                 const responseResolver = (response) => {
@@ -34512,13 +34626,12 @@ class Protocol {
      * Emits a notification, which is a one-way message that does not expect a response.
      */
     async notification(notification, options) {
-        var _a, _b, _c, _d, _e;
         if (!this._transport) {
             throw new Error('Not connected');
         }
         this.assertNotificationCapability(notification.method);
         // Queue notification if related to a task
-        const relatedTaskId = (_a = options === null || options === void 0 ? void 0 : options.relatedTask) === null || _a === void 0 ? void 0 : _a.taskId;
+        const relatedTaskId = options?.relatedTask?.taskId;
         if (relatedTaskId) {
             // Build the JSONRPC notification with metadata
             const jsonrpcNotification = {
@@ -34527,7 +34640,7 @@ class Protocol {
                 params: {
                     ...notification.params,
                     _meta: {
-                        ...(((_b = notification.params) === null || _b === void 0 ? void 0 : _b._meta) || {}),
+                        ...(notification.params?._meta || {}),
                         [RELATED_TASK_META_KEY]: options.relatedTask
                     }
                 }
@@ -34541,10 +34654,10 @@ class Protocol {
             // This prevents duplicate delivery for bidirectional transports
             return;
         }
-        const debouncedMethods = (_d = (_c = this._options) === null || _c === void 0 ? void 0 : _c.debouncedNotificationMethods) !== null && _d !== void 0 ? _d : [];
+        const debouncedMethods = this._options?.debouncedNotificationMethods ?? [];
         // A notification can only be debounced if it's in the list AND it's "simple"
         // (i.e., has no parameters and no related request ID or related task that could be lost).
-        const canDebounce = debouncedMethods.includes(notification.method) && !notification.params && !(options === null || options === void 0 ? void 0 : options.relatedRequestId) && !(options === null || options === void 0 ? void 0 : options.relatedTask);
+        const canDebounce = debouncedMethods.includes(notification.method) && !notification.params && !options?.relatedRequestId && !options?.relatedTask;
         if (canDebounce) {
             // If a notification of this type is already scheduled, do nothing.
             if (this._pendingDebouncedNotifications.has(notification.method)) {
@@ -34555,7 +34668,6 @@ class Protocol {
             // Schedule the actual send to happen in the next microtask.
             // This allows all synchronous calls in the current event loop tick to be coalesced.
             Promise.resolve().then(() => {
-                var _a, _b;
                 // Un-mark the notification so the next one can be scheduled.
                 this._pendingDebouncedNotifications.delete(notification.method);
                 // SAFETY CHECK: If the connection was closed while this was pending, abort.
@@ -34567,13 +34679,13 @@ class Protocol {
                     jsonrpc: '2.0'
                 };
                 // Augment with related task metadata if relatedTask is provided
-                if (options === null || options === void 0 ? void 0 : options.relatedTask) {
+                if (options?.relatedTask) {
                     jsonrpcNotification = {
                         ...jsonrpcNotification,
                         params: {
                             ...jsonrpcNotification.params,
                             _meta: {
-                                ...(((_a = jsonrpcNotification.params) === null || _a === void 0 ? void 0 : _a._meta) || {}),
+                                ...(jsonrpcNotification.params?._meta || {}),
                                 [RELATED_TASK_META_KEY]: options.relatedTask
                             }
                         }
@@ -34581,7 +34693,7 @@ class Protocol {
                 }
                 // Send the notification, but don't await it here to avoid blocking.
                 // Handle potential errors with a .catch().
-                (_b = this._transport) === null || _b === void 0 ? void 0 : _b.send(jsonrpcNotification, options).catch(error => this._onerror(error));
+                this._transport?.send(jsonrpcNotification, options).catch(error => this._onerror(error));
             });
             // Return immediately.
             return;
@@ -34591,13 +34703,13 @@ class Protocol {
             jsonrpc: '2.0'
         };
         // Augment with related task metadata if relatedTask is provided
-        if (options === null || options === void 0 ? void 0 : options.relatedTask) {
+        if (options?.relatedTask) {
             jsonrpcNotification = {
                 ...jsonrpcNotification,
                 params: {
                     ...jsonrpcNotification.params,
                     _meta: {
-                        ...(((_e = jsonrpcNotification.params) === null || _e === void 0 ? void 0 : _e._meta) || {}),
+                        ...(jsonrpcNotification.params?._meta || {}),
                         [RELATED_TASK_META_KEY]: options.relatedTask
                     }
                 }
@@ -34673,12 +34785,11 @@ class Protocol {
      * simply propagates the error.
      */
     async _enqueueTaskMessage(taskId, message, sessionId) {
-        var _a;
         // Task message queues are only used when taskStore is configured
         if (!this._taskStore || !this._taskMessageQueue) {
             throw new Error('Cannot enqueue task message: taskStore and taskMessageQueue are not configured');
         }
-        const maxQueueSize = (_a = this._options) === null || _a === void 0 ? void 0 : _a.maxTaskQueueSize;
+        const maxQueueSize = this._options?.maxTaskQueueSize;
         await this._taskMessageQueue.enqueue(taskId, message, sessionId, maxQueueSize);
     }
     /**
@@ -34715,16 +34826,15 @@ class Protocol {
      * @returns Promise that resolves when an update occurs or rejects if aborted
      */
     async _waitForTaskUpdate(taskId, signal) {
-        var _a, _b, _c;
         // Get the task's poll interval, falling back to default
-        let interval = (_b = (_a = this._options) === null || _a === void 0 ? void 0 : _a.defaultTaskPollInterval) !== null && _b !== void 0 ? _b : 1000;
+        let interval = this._options?.defaultTaskPollInterval ?? 1000;
         try {
-            const task = await ((_c = this._taskStore) === null || _c === void 0 ? void 0 : _c.getTask(taskId));
-            if (task === null || task === void 0 ? void 0 : task.pollInterval) {
+            const task = await this._taskStore?.getTask(taskId);
+            if (task?.pollInterval) {
                 interval = task.pollInterval;
             }
         }
-        catch (_d) {
+        catch {
             // Use default interval if task lookup fails
         }
         return new Promise((resolve, reject) => {
@@ -42075,6 +42185,7 @@ function requireAjv$1 () {
 }
 
 var ajvExports = requireAjv$1();
+var Ajv = /*@__PURE__*/getDefaultExportFromCjs(ajvExports);
 
 var dist = {exports: {}};
 
@@ -48649,7 +48760,7 @@ var _addFormats = /*@__PURE__*/getDefaultExportFromCjs(distExports);
  * AJV-based JSON Schema validator provider
  */
 function createDefaultAjvInstance() {
-    const ajv = new ajvExports.Ajv({
+    const ajv = new Ajv({
         strict: false,
         validateFormats: true,
         validateSchema: false,
@@ -48694,7 +48805,7 @@ class AjvJsonSchemaValidator {
      * ```
      */
     constructor(ajv) {
-        this._ajv = ajv !== null && ajv !== void 0 ? ajv : createDefaultAjvInstance();
+        this._ajv = ajv ?? createDefaultAjvInstance();
     }
     /**
      * Create a validator for the given JSON Schema
@@ -48706,10 +48817,9 @@ class AjvJsonSchemaValidator {
      * @returns A validator function that validates input data
      */
     getValidator(schema) {
-        var _a;
         // Check if schema has $id and is already compiled/cached
         const ajvValidator = '$id' in schema && typeof schema.$id === 'string'
-            ? ((_a = this._ajv.getSchema(schema.$id)) !== null && _a !== void 0 ? _a : this._ajv.compile(schema))
+            ? (this._ajv.getSchema(schema.$id) ?? this._ajv.compile(schema))
             : this._ajv.compile(schema);
         return (input) => {
             const valid = ajvValidator(input);
@@ -48789,7 +48899,6 @@ class ExperimentalClientTasks {
      * @experimental
      */
     async *callToolStream(params, resultSchema = CallToolResultSchema, options) {
-        var _a;
         // Access Client's internal methods
         const clientInternal = this._client;
         // Add task creation parameters if server supports it and not explicitly provided
@@ -48797,7 +48906,7 @@ class ExperimentalClientTasks {
             ...options,
             // We check if the tool is known to be a task during auto-configuration, but assume
             // the caller knows what they're doing if they pass this explicitly
-            task: (_a = options === null || options === void 0 ? void 0 : options.task) !== null && _a !== void 0 ? _a : (clientInternal.isToolTask(params.name) ? {} : undefined)
+            task: options?.task ?? (clientInternal.isToolTask(params.name) ? {} : undefined)
         };
         const stream = clientInternal.requestStream({ method: 'tools/call', params }, resultSchema, optionsWithTask);
         // Get the validator for this tool (if it has an output schema)
@@ -48933,13 +49042,12 @@ class ExperimentalClientTasks {
  * @experimental
  */
 function assertToolsCallTaskCapability(requests, method, entityName) {
-    var _a;
     if (!requests) {
         throw new Error(`${entityName} does not support task creation (required for ${method})`);
     }
     switch (method) {
         case 'tools/call':
-            if (!((_a = requests.tools) === null || _a === void 0 ? void 0 : _a.call)) {
+            if (!requests.tools?.call) {
                 throw new Error(`${entityName} does not support task creation for tools/call (required for ${method})`);
             }
             break;
@@ -48957,18 +49065,17 @@ function assertToolsCallTaskCapability(requests, method, entityName) {
  * @experimental
  */
 function assertClientRequestTaskCapability(requests, method, entityName) {
-    var _a, _b;
     if (!requests) {
         throw new Error(`${entityName} does not support task creation (required for ${method})`);
     }
     switch (method) {
         case 'sampling/createMessage':
-            if (!((_a = requests.sampling) === null || _a === void 0 ? void 0 : _a.createMessage)) {
+            if (!requests.sampling?.createMessage) {
                 throw new Error(`${entityName} does not support task creation for sampling/createMessage (required for ${method})`);
             }
             break;
         case 'elicitation/create':
-            if (!((_b = requests.elicitation) === null || _b === void 0 ? void 0 : _b.create)) {
+            if (!requests.elicitation?.create) {
                 throw new Error(`${entityName} does not support task creation for elicitation/create (required for ${method})`);
             }
             break;
@@ -49002,13 +49109,19 @@ function applyElicitationDefaults(schema, data) {
     }
     if (Array.isArray(schema.anyOf)) {
         for (const sub of schema.anyOf) {
-            applyElicitationDefaults(sub, data);
+            // Skip boolean schemas (true/false are valid JSON Schemas but have no defaults)
+            if (typeof sub !== 'boolean') {
+                applyElicitationDefaults(sub, data);
+            }
         }
     }
     // Combine schemas
     if (Array.isArray(schema.oneOf)) {
         for (const sub of schema.oneOf) {
-            applyElicitationDefaults(sub, data);
+            // Skip boolean schemas (true/false are valid JSON Schemas but have no defaults)
+            if (typeof sub !== 'boolean') {
+                applyElicitationDefaults(sub, data);
+            }
         }
     }
 }
@@ -49063,14 +49176,44 @@ class Client extends Protocol {
      * Initializes this client with the given name and version information.
      */
     constructor(_clientInfo, options) {
-        var _a, _b;
         super(options);
         this._clientInfo = _clientInfo;
         this._cachedToolOutputValidators = new Map();
         this._cachedKnownTaskTools = new Set();
         this._cachedRequiredTaskTools = new Set();
-        this._capabilities = (_a = options === null || options === void 0 ? void 0 : options.capabilities) !== null && _a !== void 0 ? _a : {};
-        this._jsonSchemaValidator = (_b = options === null || options === void 0 ? void 0 : options.jsonSchemaValidator) !== null && _b !== void 0 ? _b : new AjvJsonSchemaValidator();
+        this._listChangedDebounceTimers = new Map();
+        this._capabilities = options?.capabilities ?? {};
+        this._jsonSchemaValidator = options?.jsonSchemaValidator ?? new AjvJsonSchemaValidator();
+        // Store list changed config for setup after connection (when we know server capabilities)
+        if (options?.listChanged) {
+            this._pendingListChangedConfig = options.listChanged;
+        }
+    }
+    /**
+     * Set up handlers for list changed notifications based on config and server capabilities.
+     * This should only be called after initialization when server capabilities are known.
+     * Handlers are silently skipped if the server doesn't advertise the corresponding listChanged capability.
+     * @internal
+     */
+    _setupListChangedHandlers(config) {
+        if (config.tools && this._serverCapabilities?.tools?.listChanged) {
+            this._setupListChangedHandler('tools', ToolListChangedNotificationSchema, config.tools, async () => {
+                const result = await this.listTools();
+                return result.tools;
+            });
+        }
+        if (config.prompts && this._serverCapabilities?.prompts?.listChanged) {
+            this._setupListChangedHandler('prompts', PromptListChangedNotificationSchema, config.prompts, async () => {
+                const result = await this.listPrompts();
+                return result.prompts;
+            });
+        }
+        if (config.resources && this._serverCapabilities?.resources?.listChanged) {
+            this._setupListChangedHandler('resources', ResourceListChangedNotificationSchema, config.resources, async () => {
+                const result = await this.listResources();
+                return result.resources;
+            });
+        }
     }
     /**
      * Access experimental features.
@@ -49102,9 +49245,8 @@ class Client extends Protocol {
      * Override request handler registration to enforce client-side validation for elicitation.
      */
     setRequestHandler(requestSchema, handler) {
-        var _a, _b, _c;
         const shape = getObjectShape(requestSchema);
-        const methodSchema = shape === null || shape === void 0 ? void 0 : shape.method;
+        const methodSchema = shape?.method;
         if (!methodSchema) {
             throw new Error('Schema is missing a method literal');
         }
@@ -49112,13 +49254,13 @@ class Client extends Protocol {
         let methodValue;
         if (isZ4Schema(methodSchema)) {
             const v4Schema = methodSchema;
-            const v4Def = (_a = v4Schema._zod) === null || _a === void 0 ? void 0 : _a.def;
-            methodValue = (_b = v4Def === null || v4Def === void 0 ? void 0 : v4Def.value) !== null && _b !== void 0 ? _b : v4Schema.value;
+            const v4Def = v4Schema._zod?.def;
+            methodValue = v4Def?.value ?? v4Schema.value;
         }
         else {
             const v3Schema = methodSchema;
             const legacyDef = v3Schema._def;
-            methodValue = (_c = legacyDef === null || legacyDef === void 0 ? void 0 : legacyDef.value) !== null && _c !== void 0 ? _c : v3Schema.value;
+            methodValue = legacyDef?.value ?? v3Schema.value;
         }
         if (typeof methodValue !== 'string') {
             throw new Error('Schema method literal must be a string');
@@ -49126,7 +49268,6 @@ class Client extends Protocol {
         const method = methodValue;
         if (method === 'elicitation/create') {
             const wrappedHandler = async (request, extra) => {
-                var _a, _b, _c;
                 const validatedRequest = safeParse$1(ElicitRequestSchema, request);
                 if (!validatedRequest.success) {
                     // Type guard: if success is false, error is guaranteed to exist
@@ -49134,12 +49275,12 @@ class Client extends Protocol {
                     throw new McpError(ErrorCode.InvalidParams, `Invalid elicitation request: ${errorMessage}`);
                 }
                 const { params } = validatedRequest.data;
-                const mode = (_a = params.mode) !== null && _a !== void 0 ? _a : 'form';
+                params.mode = params.mode ?? 'form';
                 const { supportsFormMode, supportsUrlMode } = getSupportedElicitationModes(this._capabilities.elicitation);
-                if (mode === 'form' && !supportsFormMode) {
+                if (params.mode === 'form' && !supportsFormMode) {
                     throw new McpError(ErrorCode.InvalidParams, 'Client does not support form-mode elicitation requests');
                 }
-                if (mode === 'url' && !supportsUrlMode) {
+                if (params.mode === 'url' && !supportsUrlMode) {
                     throw new McpError(ErrorCode.InvalidParams, 'Client does not support URL-mode elicitation requests');
                 }
                 const result = await Promise.resolve(handler(request, extra));
@@ -49162,13 +49303,13 @@ class Client extends Protocol {
                     throw new McpError(ErrorCode.InvalidParams, `Invalid elicitation result: ${errorMessage}`);
                 }
                 const validatedResult = validationResult.data;
-                const requestedSchema = mode === 'form' ? params.requestedSchema : undefined;
-                if (mode === 'form' && validatedResult.action === 'accept' && validatedResult.content && requestedSchema) {
-                    if ((_c = (_b = this._capabilities.elicitation) === null || _b === void 0 ? void 0 : _b.form) === null || _c === void 0 ? void 0 : _c.applyDefaults) {
+                const requestedSchema = params.mode === 'form' ? params.requestedSchema : undefined;
+                if (params.mode === 'form' && validatedResult.action === 'accept' && validatedResult.content && requestedSchema) {
+                    if (this._capabilities.elicitation?.form?.applyDefaults) {
                         try {
                             applyElicitationDefaults(requestedSchema, validatedResult.content);
                         }
-                        catch (_d) {
+                        catch {
                             // gracefully ignore errors in default application
                         }
                     }
@@ -49213,8 +49354,7 @@ class Client extends Protocol {
         return super.setRequestHandler(requestSchema, handler);
     }
     assertCapability(capability, method) {
-        var _a;
-        if (!((_a = this._serverCapabilities) === null || _a === void 0 ? void 0 : _a[capability])) {
+        if (!this._serverCapabilities?.[capability]) {
             throw new Error(`Server does not support ${capability} (required for ${method})`);
         }
     }
@@ -49250,6 +49390,11 @@ class Client extends Protocol {
             await this.notification({
                 method: 'notifications/initialized'
             });
+            // Set up list changed handlers now that we know server capabilities
+            if (this._pendingListChangedConfig) {
+                this._setupListChangedHandlers(this._pendingListChangedConfig);
+                this._pendingListChangedConfig = undefined;
+            }
         }
         catch (error) {
             // Disconnect if initialization fails.
@@ -49276,16 +49421,15 @@ class Client extends Protocol {
         return this._instructions;
     }
     assertCapabilityForMethod(method) {
-        var _a, _b, _c, _d, _e;
         switch (method) {
             case 'logging/setLevel':
-                if (!((_a = this._serverCapabilities) === null || _a === void 0 ? void 0 : _a.logging)) {
+                if (!this._serverCapabilities?.logging) {
                     throw new Error(`Server does not support logging (required for ${method})`);
                 }
                 break;
             case 'prompts/get':
             case 'prompts/list':
-                if (!((_b = this._serverCapabilities) === null || _b === void 0 ? void 0 : _b.prompts)) {
+                if (!this._serverCapabilities?.prompts) {
                     throw new Error(`Server does not support prompts (required for ${method})`);
                 }
                 break;
@@ -49294,7 +49438,7 @@ class Client extends Protocol {
             case 'resources/read':
             case 'resources/subscribe':
             case 'resources/unsubscribe':
-                if (!((_c = this._serverCapabilities) === null || _c === void 0 ? void 0 : _c.resources)) {
+                if (!this._serverCapabilities?.resources) {
                     throw new Error(`Server does not support resources (required for ${method})`);
                 }
                 if (method === 'resources/subscribe' && !this._serverCapabilities.resources.subscribe) {
@@ -49303,22 +49447,21 @@ class Client extends Protocol {
                 break;
             case 'tools/call':
             case 'tools/list':
-                if (!((_d = this._serverCapabilities) === null || _d === void 0 ? void 0 : _d.tools)) {
+                if (!this._serverCapabilities?.tools) {
                     throw new Error(`Server does not support tools (required for ${method})`);
                 }
                 break;
             case 'completion/complete':
-                if (!((_e = this._serverCapabilities) === null || _e === void 0 ? void 0 : _e.completions)) {
+                if (!this._serverCapabilities?.completions) {
                     throw new Error(`Server does not support completions (required for ${method})`);
                 }
                 break;
         }
     }
     assertNotificationCapability(method) {
-        var _a;
         switch (method) {
             case 'notifications/roots/list_changed':
-                if (!((_a = this._capabilities.roots) === null || _a === void 0 ? void 0 : _a.listChanged)) {
+                if (!this._capabilities.roots?.listChanged) {
                     throw new Error(`Client does not support roots list changed notifications (required for ${method})`);
                 }
                 break;
@@ -49357,17 +49500,15 @@ class Client extends Protocol {
         }
     }
     assertTaskCapability(method) {
-        var _a, _b;
-        assertToolsCallTaskCapability((_b = (_a = this._serverCapabilities) === null || _a === void 0 ? void 0 : _a.tasks) === null || _b === void 0 ? void 0 : _b.requests, method, 'Server');
+        assertToolsCallTaskCapability(this._serverCapabilities?.tasks?.requests, method, 'Server');
     }
     assertTaskHandlerCapability(method) {
-        var _a;
         // Task handlers are registered in Protocol constructor before _capabilities is initialized
         // Skip capability check for task methods during initialization
         if (!this._capabilities) {
             return;
         }
-        assertClientRequestTaskCapability((_a = this._capabilities.tasks) === null || _a === void 0 ? void 0 : _a.requests, method, 'Client');
+        assertClientRequestTaskCapability(this._capabilities.tasks?.requests, method, 'Client');
     }
     async ping(options) {
         return this.request({ method: 'ping' }, EmptyResultSchema, options);
@@ -49437,8 +49578,7 @@ class Client extends Protocol {
         return result;
     }
     isToolTask(toolName) {
-        var _a, _b, _c, _d;
-        if (!((_d = (_c = (_b = (_a = this._serverCapabilities) === null || _a === void 0 ? void 0 : _a.tasks) === null || _b === void 0 ? void 0 : _b.requests) === null || _c === void 0 ? void 0 : _c.tools) === null || _d === void 0 ? void 0 : _d.call)) {
+        if (!this._serverCapabilities?.tasks?.requests?.tools?.call) {
             return false;
         }
         return this._cachedKnownTaskTools.has(toolName);
@@ -49455,7 +49595,6 @@ class Client extends Protocol {
      * Called after listTools() to pre-compile validators for better performance.
      */
     cacheToolMetadata(tools) {
-        var _a;
         this._cachedToolOutputValidators.clear();
         this._cachedKnownTaskTools.clear();
         this._cachedRequiredTaskTools.clear();
@@ -49466,7 +49605,7 @@ class Client extends Protocol {
                 this._cachedToolOutputValidators.set(tool.name, toolValidator);
             }
             // If the tool supports task-based execution, cache that information
-            const taskSupport = (_a = tool.execution) === null || _a === void 0 ? void 0 : _a.taskSupport;
+            const taskSupport = tool.execution?.taskSupport;
             if (taskSupport === 'required' || taskSupport === 'optional') {
                 this._cachedKnownTaskTools.add(tool.name);
             }
@@ -49486,6 +49625,55 @@ class Client extends Protocol {
         // Cache the tools and their output schemas for future validation
         this.cacheToolMetadata(result.tools);
         return result;
+    }
+    /**
+     * Set up a single list changed handler.
+     * @internal
+     */
+    _setupListChangedHandler(listType, notificationSchema, options, fetcher) {
+        // Validate options using Zod schema (validates autoRefresh and debounceMs)
+        const parseResult = ListChangedOptionsBaseSchema.safeParse(options);
+        if (!parseResult.success) {
+            throw new Error(`Invalid ${listType} listChanged options: ${parseResult.error.message}`);
+        }
+        // Validate callback
+        if (typeof options.onChanged !== 'function') {
+            throw new Error(`Invalid ${listType} listChanged options: onChanged must be a function`);
+        }
+        const { autoRefresh, debounceMs } = parseResult.data;
+        const { onChanged } = options;
+        const refresh = async () => {
+            if (!autoRefresh) {
+                onChanged(null, null);
+                return;
+            }
+            try {
+                const items = await fetcher();
+                onChanged(null, items);
+            }
+            catch (e) {
+                const error = e instanceof Error ? e : new Error(String(e));
+                onChanged(error, null);
+            }
+        };
+        const handler = () => {
+            if (debounceMs) {
+                // Clear any pending debounce timer for this list type
+                const existingTimer = this._listChangedDebounceTimers.get(listType);
+                if (existingTimer) {
+                    clearTimeout(existingTimer);
+                }
+                // Set up debounced refresh
+                const timer = setTimeout(refresh, debounceMs);
+                this._listChangedDebounceTimers.set(listType, timer);
+            }
+            else {
+                // No debounce, refresh immediately
+                refresh();
+            }
+        };
+        // Register notification handler
+        this.setNotificationHandler(notificationSchema, handler);
     }
     async sendRootsListChanged() {
         return this.notification({ method: 'notifications/roots/list_changed' });
@@ -49525,7 +49713,7 @@ function createFetchWithInit(baseFetch = fetch, baseInit) {
             ...baseInit,
             ...init,
             // Headers need special handling - merge instead of replace
-            headers: (init === null || init === void 0 ? void 0 : init.headers) ? { ...normalizeHeaders(baseInit.headers), ...normalizeHeaders(init.headers) } : baseInit.headers
+            headers: init?.headers ? { ...normalizeHeaders(baseInit.headers), ...normalizeHeaders(init.headers) } : baseInit.headers
         };
         return baseFetch(url, mergedInit);
     };
@@ -50003,7 +50191,7 @@ const OAUTH_ERRORS = {
 
 class UnauthorizedError extends Error {
     constructor(message) {
-        super(message !== null && message !== void 0 ? message : 'Unauthorized');
+        super(message ?? 'Unauthorized');
     }
 }
 function isClientAuthMethod(method) {
@@ -50137,18 +50325,17 @@ async function parseErrorResponse(input) {
  * instead of linking together the other lower-level functions in this module.
  */
 async function auth(provider, options) {
-    var _a, _b;
     try {
         return await authInternal(provider, options);
     }
     catch (error) {
         // Handle recoverable error types by invalidating credentials and retrying
         if (error instanceof InvalidClientError || error instanceof UnauthorizedClientError) {
-            await ((_a = provider.invalidateCredentials) === null || _a === void 0 ? void 0 : _a.call(provider, 'all'));
+            await provider.invalidateCredentials?.('all');
             return await authInternal(provider, options);
         }
         else if (error instanceof InvalidGrantError) {
-            await ((_b = provider.invalidateCredentials) === null || _b === void 0 ? void 0 : _b.call(provider, 'tokens'));
+            await provider.invalidateCredentials?.('tokens');
             return await authInternal(provider, options);
         }
         // Throw otherwise
@@ -50156,7 +50343,6 @@ async function auth(provider, options) {
     }
 }
 async function authInternal(provider, { serverUrl, authorizationCode, scope, resourceMetadataUrl, fetchFn }) {
-    var _a, _b;
     let resourceMetadata;
     let authorizationServerUrl;
     try {
@@ -50165,7 +50351,7 @@ async function authInternal(provider, { serverUrl, authorizationCode, scope, res
             authorizationServerUrl = resourceMetadata.authorization_servers[0];
         }
     }
-    catch (_c) {
+    catch {
         // Ignore errors and fall back to /.well-known/oauth-authorization-server
     }
     /**
@@ -50185,7 +50371,7 @@ async function authInternal(provider, { serverUrl, authorizationCode, scope, res
         if (authorizationCode !== undefined) {
             throw new Error('Existing OAuth client information is required when exchanging an authorization code');
         }
-        const supportsUrlBasedClientId = (metadata === null || metadata === void 0 ? void 0 : metadata.client_id_metadata_document_supported) === true;
+        const supportsUrlBasedClientId = metadata?.client_id_metadata_document_supported === true;
         const clientMetadataUrl = provider.clientMetadataUrl;
         if (clientMetadataUrl && !isHttpsUrl(clientMetadataUrl)) {
             throw new InvalidClientMetadataError(`clientMetadataUrl must be a valid HTTPS URL with a non-root pathname, got: ${clientMetadataUrl}`);
@@ -50196,7 +50382,7 @@ async function authInternal(provider, { serverUrl, authorizationCode, scope, res
             clientInformation = {
                 client_id: clientMetadataUrl
             };
-            await ((_a = provider.saveClientInformation) === null || _a === void 0 ? void 0 : _a.call(provider, clientInformation));
+            await provider.saveClientInformation?.(clientInformation);
         }
         else {
             // Fallback to dynamic registration
@@ -50227,7 +50413,7 @@ async function authInternal(provider, { serverUrl, authorizationCode, scope, res
     }
     const tokens = await provider.tokens();
     // Handle token refresh or new authorization
-    if (tokens === null || tokens === void 0 ? void 0 : tokens.refresh_token) {
+    if (tokens?.refresh_token) {
         try {
             // Attempt to refresh the token
             const newTokens = await refreshAuthorization(authorizationServerUrl, {
@@ -50257,7 +50443,7 @@ async function authInternal(provider, { serverUrl, authorizationCode, scope, res
         clientInformation,
         state,
         redirectUrl: provider.redirectUrl,
-        scope: scope || ((_b = resourceMetadata === null || resourceMetadata === void 0 ? void 0 : resourceMetadata.scopes_supported) === null || _b === void 0 ? void 0 : _b.join(' ')) || provider.clientMetadata.scope,
+        scope: scope || resourceMetadata?.scopes_supported?.join(' ') || provider.clientMetadata.scope,
         resource
     });
     await provider.saveCodeVerifier(codeVerifier);
@@ -50275,7 +50461,7 @@ function isHttpsUrl(value) {
         const url = new URL(value);
         return url.protocol === 'https:' && url.pathname !== '/';
     }
-    catch (_a) {
+    catch {
         return false;
     }
 }
@@ -50283,7 +50469,7 @@ async function selectResourceURL(serverUrl, provider, resourceMetadata) {
     const defaultResource = resourceUrlFromServerUrl(serverUrl);
     // If provider has custom validation, delegate to it
     if (provider.validateResourceURL) {
-        return await provider.validateResourceURL(defaultResource, resourceMetadata === null || resourceMetadata === void 0 ? void 0 : resourceMetadata.resource);
+        return await provider.validateResourceURL(defaultResource, resourceMetadata?.resource);
     }
     // Only include resource parameter when Protected Resource Metadata is present
     if (!resourceMetadata) {
@@ -50314,7 +50500,7 @@ function extractWWWAuthenticateParams(res) {
         try {
             resourceMetadataUrl = new URL(resourceMetadataMatch);
         }
-        catch (_a) {
+        catch {
             // Ignore invalid URL
         }
     }
@@ -50353,17 +50539,16 @@ function extractFieldFromWwwAuth(response, fieldName) {
  * return `undefined`. Any other errors will be thrown as exceptions.
  */
 async function discoverOAuthProtectedResourceMetadata(serverUrl, opts, fetchFn = fetch) {
-    var _a, _b;
     const response = await discoverMetadataWithFallback(serverUrl, 'oauth-protected-resource', fetchFn, {
-        protocolVersion: opts === null || opts === void 0 ? void 0 : opts.protocolVersion,
-        metadataUrl: opts === null || opts === void 0 ? void 0 : opts.resourceMetadataUrl
+        protocolVersion: opts?.protocolVersion,
+        metadataUrl: opts?.resourceMetadataUrl
     });
     if (!response || response.status === 404) {
-        await ((_a = response === null || response === void 0 ? void 0 : response.body) === null || _a === void 0 ? void 0 : _a.cancel());
+        await response?.body?.cancel();
         throw new Error(`Resource server does not implement OAuth 2.0 Protected Resource Metadata.`);
     }
     if (!response.ok) {
-        await ((_b = response.body) === null || _b === void 0 ? void 0 : _b.cancel());
+        await response.body?.cancel();
         throw new Error(`HTTP ${response.status} trying to load well-known OAuth protected resource metadata.`);
     }
     return OAuthProtectedResourceMetadataSchema.parse(await response.json());
@@ -50418,22 +50603,21 @@ function shouldAttemptFallback(response, pathname) {
  * Generic function for discovering OAuth metadata with fallback support
  */
 async function discoverMetadataWithFallback(serverUrl, wellKnownType, fetchFn, opts) {
-    var _a, _b;
     const issuer = new URL(serverUrl);
-    const protocolVersion = (_a = opts === null || opts === void 0 ? void 0 : opts.protocolVersion) !== null && _a !== void 0 ? _a : LATEST_PROTOCOL_VERSION;
+    const protocolVersion = opts?.protocolVersion ?? LATEST_PROTOCOL_VERSION;
     let url;
-    if (opts === null || opts === void 0 ? void 0 : opts.metadataUrl) {
+    if (opts?.metadataUrl) {
         url = new URL(opts.metadataUrl);
     }
     else {
         // Try path-aware discovery first
         const wellKnownPath = buildWellKnownPath(wellKnownType, issuer.pathname);
-        url = new URL(wellKnownPath, (_b = opts === null || opts === void 0 ? void 0 : opts.metadataServerUrl) !== null && _b !== void 0 ? _b : issuer);
+        url = new URL(wellKnownPath, opts?.metadataServerUrl ?? issuer);
         url.search = issuer.search;
     }
     let response = await tryMetadataDiscovery(url, protocolVersion, fetchFn);
     // If path-aware discovery fails with 404 and we're not already at root, try fallback to root discovery
-    if (!(opts === null || opts === void 0 ? void 0 : opts.metadataUrl) && shouldAttemptFallback(response, issuer.pathname)) {
+    if (!opts?.metadataUrl && shouldAttemptFallback(response, issuer.pathname)) {
         const rootUrl = new URL(`/.well-known/${wellKnownType}`, issuer);
         response = await tryMetadataDiscovery(rootUrl, protocolVersion, fetchFn);
     }
@@ -50503,7 +50687,6 @@ function buildDiscoveryUrls(authorizationServerUrl) {
  * @returns Promise resolving to authorization server metadata, or undefined if discovery fails
  */
 async function discoverAuthorizationServerMetadata(authorizationServerUrl, { fetchFn = fetch, protocolVersion = LATEST_PROTOCOL_VERSION } = {}) {
-    var _a;
     const headers = {
         'MCP-Protocol-Version': protocolVersion,
         Accept: 'application/json'
@@ -50521,7 +50704,7 @@ async function discoverAuthorizationServerMetadata(authorizationServerUrl, { fet
             continue;
         }
         if (!response.ok) {
-            await ((_a = response.body) === null || _a === void 0 ? void 0 : _a.cancel());
+            await response.body?.cancel();
             // Continue looking for any 4xx response code.
             if (response.status >= 400 && response.status < 500) {
                 continue; // Try next URL
@@ -50571,7 +50754,7 @@ async function startAuthorization(authorizationServerUrl, { metadata, clientInfo
     if (scope) {
         authorizationUrl.searchParams.set('scope', scope);
     }
-    if (scope === null || scope === void 0 ? void 0 : scope.includes('offline_access')) {
+    if (scope?.includes('offline_access')) {
         // if the request includes the OIDC-only "offline_access" scope,
         // we need to set the prompt to "consent" to ensure the user is prompted to grant offline access
         // https://openid.net/specs/openid-connect-core-1_0.html#OfflineAccess
@@ -50606,8 +50789,7 @@ function prepareAuthorizationCodeRequest(authorizationCode, codeVerifier, redire
  * Used by exchangeAuthorization, refreshAuthorization, and fetchToken.
  */
 async function executeTokenRequest(authorizationServerUrl, { metadata, tokenRequestParams, clientInformation, addClientAuthentication, resource, fetchFn }) {
-    var _a;
-    const tokenUrl = (metadata === null || metadata === void 0 ? void 0 : metadata.token_endpoint) ? new URL(metadata.token_endpoint) : new URL('/token', authorizationServerUrl);
+    const tokenUrl = metadata?.token_endpoint ? new URL(metadata.token_endpoint) : new URL('/token', authorizationServerUrl);
     const headers = new Headers({
         'Content-Type': 'application/x-www-form-urlencoded',
         Accept: 'application/json'
@@ -50619,11 +50801,11 @@ async function executeTokenRequest(authorizationServerUrl, { metadata, tokenRequ
         await addClientAuthentication(headers, tokenRequestParams, tokenUrl, metadata);
     }
     else if (clientInformation) {
-        const supportedMethods = (_a = metadata === null || metadata === void 0 ? void 0 : metadata.token_endpoint_auth_methods_supported) !== null && _a !== void 0 ? _a : [];
+        const supportedMethods = metadata?.token_endpoint_auth_methods_supported ?? [];
         const authMethod = selectClientAuthMethod(clientInformation, supportedMethods);
         applyClientAuthentication(authMethod, clientInformation, headers, tokenRequestParams);
     }
-    const response = await (fetchFn !== null && fetchFn !== void 0 ? fetchFn : fetch)(tokenUrl, {
+    const response = await (fetchFn ?? fetch)(tokenUrl, {
         method: 'POST',
         headers,
         body: tokenRequestParams
@@ -50709,7 +50891,7 @@ async function fetchToken(provider, authorizationServerUrl, { metadata, resource
     return executeTokenRequest(authorizationServerUrl, {
         metadata,
         tokenRequestParams,
-        clientInformation: clientInformation !== null && clientInformation !== void 0 ? clientInformation : undefined,
+        clientInformation: clientInformation ?? undefined,
         addClientAuthentication: provider.addClientAuthentication,
         resource,
         fetchFn
@@ -50729,7 +50911,7 @@ async function registerClient(authorizationServerUrl, { metadata, clientMetadata
     else {
         registrationUrl = new URL('/register', authorizationServerUrl);
     }
-    const response = await (fetchFn !== null && fetchFn !== void 0 ? fetchFn : fetch)(registrationUrl, {
+    const response = await (fetchFn ?? fetch)(registrationUrl, {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json'
@@ -50887,20 +51069,18 @@ class StreamableHTTPError extends Error {
  */
 class StreamableHTTPClientTransport {
     constructor(url, opts) {
-        var _a;
         this._hasCompletedAuthFlow = false; // Circuit breaker: detect auth success followed by immediate 401
         this._url = url;
         this._resourceMetadataUrl = undefined;
         this._scope = undefined;
-        this._requestInit = opts === null || opts === void 0 ? void 0 : opts.requestInit;
-        this._authProvider = opts === null || opts === void 0 ? void 0 : opts.authProvider;
-        this._fetch = opts === null || opts === void 0 ? void 0 : opts.fetch;
-        this._fetchWithInit = createFetchWithInit(opts === null || opts === void 0 ? void 0 : opts.fetch, opts === null || opts === void 0 ? void 0 : opts.requestInit);
-        this._sessionId = opts === null || opts === void 0 ? void 0 : opts.sessionId;
-        this._reconnectionOptions = (_a = opts === null || opts === void 0 ? void 0 : opts.reconnectionOptions) !== null && _a !== void 0 ? _a : DEFAULT_STREAMABLE_HTTP_RECONNECTION_OPTIONS;
+        this._requestInit = opts?.requestInit;
+        this._authProvider = opts?.authProvider;
+        this._fetch = opts?.fetch;
+        this._fetchWithInit = createFetchWithInit(opts?.fetch, opts?.requestInit);
+        this._sessionId = opts?.sessionId;
+        this._reconnectionOptions = opts?.reconnectionOptions ?? DEFAULT_STREAMABLE_HTTP_RECONNECTION_OPTIONS;
     }
     async _authThenStart() {
-        var _a;
         if (!this._authProvider) {
             throw new UnauthorizedError('No auth provider');
         }
@@ -50914,7 +51094,7 @@ class StreamableHTTPClientTransport {
             });
         }
         catch (error) {
-            (_a = this.onerror) === null || _a === void 0 ? void 0 : _a.call(this, error);
+            this.onerror?.(error);
             throw error;
         }
         if (result !== 'AUTHORIZED') {
@@ -50923,7 +51103,6 @@ class StreamableHTTPClientTransport {
         return await this._startOrAuthSse({ resumptionToken: undefined });
     }
     async _commonHeaders() {
-        var _a;
         const headers = {};
         if (this._authProvider) {
             const tokens = await this._authProvider.tokens();
@@ -50937,14 +51116,13 @@ class StreamableHTTPClientTransport {
         if (this._protocolVersion) {
             headers['mcp-protocol-version'] = this._protocolVersion;
         }
-        const extraHeaders = normalizeHeaders((_a = this._requestInit) === null || _a === void 0 ? void 0 : _a.headers);
+        const extraHeaders = normalizeHeaders(this._requestInit?.headers);
         return new Headers({
             ...headers,
             ...extraHeaders
         });
     }
     async _startOrAuthSse(options) {
-        var _a, _b, _c, _d;
         const { resumptionToken } = options;
         try {
             // Try to open an initial SSE stream with GET to listen for server messages
@@ -50955,13 +51133,13 @@ class StreamableHTTPClientTransport {
             if (resumptionToken) {
                 headers.set('last-event-id', resumptionToken);
             }
-            const response = await ((_a = this._fetch) !== null && _a !== void 0 ? _a : fetch)(this._url, {
+            const response = await (this._fetch ?? fetch)(this._url, {
                 method: 'GET',
                 headers,
-                signal: (_b = this._abortController) === null || _b === void 0 ? void 0 : _b.signal
+                signal: this._abortController?.signal
             });
             if (!response.ok) {
-                await ((_c = response.body) === null || _c === void 0 ? void 0 : _c.cancel());
+                await response.body?.cancel();
                 if (response.status === 401 && this._authProvider) {
                     // Need to authenticate
                     return await this._authThenStart();
@@ -50976,7 +51154,7 @@ class StreamableHTTPClientTransport {
             this._handleSseStream(response.body, options, true);
         }
         catch (error) {
-            (_d = this.onerror) === null || _d === void 0 ? void 0 : _d.call(this, error);
+            this.onerror?.(error);
             throw error;
         }
     }
@@ -51005,12 +51183,11 @@ class StreamableHTTPClientTransport {
      * @param attemptCount Current reconnection attempt count for this specific stream
      */
     _scheduleReconnection(options, attemptCount = 0) {
-        var _a;
         // Use provided options or default options
         const maxRetries = this._reconnectionOptions.maxRetries;
         // Check if we've exceeded maximum retry attempts
-        if (maxRetries > 0 && attemptCount >= maxRetries) {
-            (_a = this.onerror) === null || _a === void 0 ? void 0 : _a.call(this, new Error(`Maximum reconnection attempts (${maxRetries}) exceeded.`));
+        if (attemptCount >= maxRetries) {
+            this.onerror?.(new Error(`Maximum reconnection attempts (${maxRetries}) exceeded.`));
             return;
         }
         // Calculate next delay based on current attempt count
@@ -51019,8 +51196,7 @@ class StreamableHTTPClientTransport {
         this._reconnectionTimeout = setTimeout(() => {
             // Use the last event ID to resume where we left off
             this._startOrAuthSse(options).catch(error => {
-                var _a;
-                (_a = this.onerror) === null || _a === void 0 ? void 0 : _a.call(this, new Error(`Failed to reconnect SSE stream: ${error instanceof Error ? error.message : String(error)}`));
+                this.onerror?.(new Error(`Failed to reconnect SSE stream: ${error instanceof Error ? error.message : String(error)}`));
                 // Schedule another attempt if this one failed, incrementing the attempt counter
                 this._scheduleReconnection(options, attemptCount + 1);
             });
@@ -51039,7 +51215,6 @@ class StreamableHTTPClientTransport {
         // Reconnection is for when server disconnects BEFORE sending response
         let receivedResponse = false;
         const processStream = async () => {
-            var _a, _b, _c, _d;
             // this is the closest we can get to trying to catch network errors
             // if something happens reader will throw
             try {
@@ -51063,7 +51238,7 @@ class StreamableHTTPClientTransport {
                         lastEventId = event.id;
                         // Mark that we've received a priming event - stream is now resumable
                         hasPrimingEvent = true;
-                        onresumptiontoken === null || onresumptiontoken === void 0 ? void 0 : onresumptiontoken(event.id);
+                        onresumptiontoken?.(event.id);
                     }
                     // Skip events with no data (priming events, keep-alives)
                     if (!event.data) {
@@ -51072,17 +51247,17 @@ class StreamableHTTPClientTransport {
                     if (!event.event || event.event === 'message') {
                         try {
                             const message = JSONRPCMessageSchema.parse(JSON.parse(event.data));
-                            if (isJSONRPCResponse(message)) {
+                            if (isJSONRPCResultResponse(message)) {
                                 // Mark that we received a response - no need to reconnect for this request
                                 receivedResponse = true;
                                 if (replayMessageId !== undefined) {
                                     message.id = replayMessageId;
                                 }
                             }
-                            (_a = this.onmessage) === null || _a === void 0 ? void 0 : _a.call(this, message);
+                            this.onmessage?.(message);
                         }
                         catch (error) {
-                            (_b = this.onerror) === null || _b === void 0 ? void 0 : _b.call(this, error);
+                            this.onerror?.(error);
                         }
                     }
                 }
@@ -51102,7 +51277,7 @@ class StreamableHTTPClientTransport {
             }
             catch (error) {
                 // Handle stream errors - likely a network disconnect
-                (_c = this.onerror) === null || _c === void 0 ? void 0 : _c.call(this, new Error(`SSE stream disconnected: ${error}`));
+                this.onerror?.(new Error(`SSE stream disconnected: ${error}`));
                 // Attempt to reconnect if the stream disconnects unexpectedly and we aren't closing
                 // Reconnect if: already reconnectable (GET stream) OR received a priming event (POST stream with event ID)
                 // BUT don't reconnect if we already received a response - the request is complete
@@ -51118,7 +51293,7 @@ class StreamableHTTPClientTransport {
                         }, 0);
                     }
                     catch (error) {
-                        (_d = this.onerror) === null || _d === void 0 ? void 0 : _d.call(this, new Error(`Failed to reconnect: ${error instanceof Error ? error.message : String(error)}`));
+                        this.onerror?.(new Error(`Failed to reconnect: ${error instanceof Error ? error.message : String(error)}`));
                     }
                 }
             }
@@ -51150,21 +51325,19 @@ class StreamableHTTPClientTransport {
         }
     }
     async close() {
-        var _a, _b;
         if (this._reconnectionTimeout) {
             clearTimeout(this._reconnectionTimeout);
             this._reconnectionTimeout = undefined;
         }
-        (_a = this._abortController) === null || _a === void 0 ? void 0 : _a.abort();
-        (_b = this.onclose) === null || _b === void 0 ? void 0 : _b.call(this);
+        this._abortController?.abort();
+        this.onclose?.();
     }
     async send(message, options) {
-        var _a, _b, _c, _d, _e;
         try {
             const { resumptionToken, onresumptiontoken } = options || {};
             if (resumptionToken) {
                 // If we have at last event ID, we need to reconnect the SSE stream
-                this._startOrAuthSse({ resumptionToken, replayMessageId: isJSONRPCRequest(message) ? message.id : undefined }).catch(err => { var _a; return (_a = this.onerror) === null || _a === void 0 ? void 0 : _a.call(this, err); });
+                this._startOrAuthSse({ resumptionToken, replayMessageId: isJSONRPCRequest(message) ? message.id : undefined }).catch(err => this.onerror?.(err));
                 return;
             }
             const headers = await this._commonHeaders();
@@ -51175,9 +51348,9 @@ class StreamableHTTPClientTransport {
                 method: 'POST',
                 headers,
                 body: JSON.stringify(message),
-                signal: (_a = this._abortController) === null || _a === void 0 ? void 0 : _a.signal
+                signal: this._abortController?.signal
             };
-            const response = await ((_b = this._fetch) !== null && _b !== void 0 ? _b : fetch)(this._url, init);
+            const response = await (this._fetch ?? fetch)(this._url, init);
             // Handle session ID received during initialization
             const sessionId = response.headers.get('mcp-session-id');
             if (sessionId) {
@@ -51222,7 +51395,7 @@ class StreamableHTTPClientTransport {
                             this._resourceMetadataUrl = resourceMetadataUrl;
                         }
                         // Mark that upscoping was tried.
-                        this._lastUpscopingHeader = wwwAuthHeader !== null && wwwAuthHeader !== void 0 ? wwwAuthHeader : undefined;
+                        this._lastUpscopingHeader = wwwAuthHeader ?? undefined;
                         const result = await auth(this._authProvider, {
                             serverUrl: this._url,
                             resourceMetadataUrl: this._resourceMetadataUrl,
@@ -51242,12 +51415,12 @@ class StreamableHTTPClientTransport {
             this._lastUpscopingHeader = undefined;
             // If the response is 202 Accepted, there's no body to process
             if (response.status === 202) {
-                await ((_c = response.body) === null || _c === void 0 ? void 0 : _c.cancel());
+                await response.body?.cancel();
                 // if the accepted notification is initialized, we start the SSE stream
                 // if it's supported by the server
                 if (isInitializedNotification(message)) {
                     // Start without a lastEventId since this is a fresh connection
-                    this._startOrAuthSse({ resumptionToken: undefined }).catch(err => { var _a; return (_a = this.onerror) === null || _a === void 0 ? void 0 : _a.call(this, err); });
+                    this._startOrAuthSse({ resumptionToken: undefined }).catch(err => this.onerror?.(err));
                 }
                 return;
             }
@@ -51257,29 +51430,34 @@ class StreamableHTTPClientTransport {
             // Check the response type
             const contentType = response.headers.get('content-type');
             if (hasRequests) {
-                if (contentType === null || contentType === void 0 ? void 0 : contentType.includes('text/event-stream')) {
+                if (contentType?.includes('text/event-stream')) {
                     // Handle SSE stream responses for requests
                     // We use the same handler as standalone streams, which now supports
                     // reconnection with the last event ID
                     this._handleSseStream(response.body, { onresumptiontoken }, false);
                 }
-                else if (contentType === null || contentType === void 0 ? void 0 : contentType.includes('application/json')) {
+                else if (contentType?.includes('application/json')) {
                     // For non-streaming servers, we might get direct JSON responses
                     const data = await response.json();
                     const responseMessages = Array.isArray(data)
                         ? data.map(msg => JSONRPCMessageSchema.parse(msg))
                         : [JSONRPCMessageSchema.parse(data)];
                     for (const msg of responseMessages) {
-                        (_d = this.onmessage) === null || _d === void 0 ? void 0 : _d.call(this, msg);
+                        this.onmessage?.(msg);
                     }
                 }
                 else {
+                    await response.body?.cancel();
                     throw new StreamableHTTPError(-1, `Unexpected content type: ${contentType}`);
                 }
             }
+            else {
+                // No requests in message but got 200 OK - still need to release connection
+                await response.body?.cancel();
+            }
         }
         catch (error) {
-            (_e = this.onerror) === null || _e === void 0 ? void 0 : _e.call(this, error);
+            this.onerror?.(error);
             throw error;
         }
     }
@@ -51298,7 +51476,6 @@ class StreamableHTTPClientTransport {
      * the server does not allow clients to terminate sessions.
      */
     async terminateSession() {
-        var _a, _b, _c, _d;
         if (!this._sessionId) {
             return; // No session to terminate
         }
@@ -51308,10 +51485,10 @@ class StreamableHTTPClientTransport {
                 ...this._requestInit,
                 method: 'DELETE',
                 headers,
-                signal: (_a = this._abortController) === null || _a === void 0 ? void 0 : _a.signal
+                signal: this._abortController?.signal
             };
-            const response = await ((_b = this._fetch) !== null && _b !== void 0 ? _b : fetch)(this._url, init);
-            await ((_c = response.body) === null || _c === void 0 ? void 0 : _c.cancel());
+            const response = await (this._fetch ?? fetch)(this._url, init);
+            await response.body?.cancel();
             // We specifically handle 405 as a valid response according to the spec,
             // meaning the server does not support explicit session termination
             if (!response.ok && response.status !== 405) {
@@ -51320,7 +51497,7 @@ class StreamableHTTPClientTransport {
             this._sessionId = undefined;
         }
         catch (error) {
-            (_d = this.onerror) === null || _d === void 0 ? void 0 : _d.call(this, error);
+            this.onerror?.(error);
             throw error;
         }
     }
@@ -51340,7 +51517,7 @@ class StreamableHTTPClientTransport {
     async resumeStream(lastEventId, options) {
         await this._startOrAuthSse({
             resumptionToken: lastEventId,
-            onresumptiontoken: options === null || options === void 0 ? void 0 : options.onresumptiontoken
+            onresumptiontoken: options?.onresumptiontoken
         });
     }
 }
