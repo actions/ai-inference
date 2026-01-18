@@ -11,7 +11,7 @@ vi.mock('fs', () => ({
 
 vi.mock('@actions/core', () => core)
 
-const {loadContentFromFileOrInput} = await import('../src/helpers.js')
+const {loadContentFromFileOrInput, parseCustomHeaders} = await import('../src/helpers.js')
 
 describe('helpers.ts', () => {
   beforeEach(() => {
@@ -130,6 +130,182 @@ describe('helpers.ts', () => {
       const result = loadContentFromFileOrInput('file-input', 'content-input', defaultValue)
 
       expect(result).toBe(defaultValue)
+    })
+  })
+
+  describe('parseCustomHeaders', () => {
+    beforeEach(() => {
+      vi.clearAllMocks()
+    })
+
+    it('parses YAML format headers correctly', () => {
+      const yamlInput = `header1: value1
+header2: value2
+X-Custom-Header: custom-value`
+
+      const result = parseCustomHeaders(yamlInput)
+
+      expect(result).toEqual({
+        header1: 'value1',
+        header2: 'value2',
+        'X-Custom-Header': 'custom-value',
+      })
+      expect(core.info).toHaveBeenCalledWith('Custom header added: header1: value1')
+      expect(core.info).toHaveBeenCalledWith('Custom header added: header2: value2')
+      expect(core.info).toHaveBeenCalledWith('Custom header added: X-Custom-Header: custom-value')
+    })
+
+    it('parses JSON format headers correctly', () => {
+      const jsonInput = '{"header1": "value1", "header2": "value2", "X-Team": "engineering"}'
+
+      const result = parseCustomHeaders(jsonInput)
+
+      expect(result).toEqual({
+        header1: 'value1',
+        header2: 'value2',
+        'X-Team': 'engineering',
+      })
+      expect(core.info).toHaveBeenCalledWith('Custom header added: header1: value1')
+      expect(core.info).toHaveBeenCalledWith('Custom header added: header2: value2')
+      expect(core.info).toHaveBeenCalledWith('Custom header added: X-Team: engineering')
+    })
+
+    it('returns empty object for empty input', () => {
+      expect(parseCustomHeaders('')).toEqual({})
+      expect(parseCustomHeaders('  ')).toEqual({})
+      expect(core.warning).not.toHaveBeenCalled()
+    })
+
+    it('masks sensitive header values in logs', () => {
+      const yamlInput = `Ocp-Apim-Subscription-Key: secret123
+X-Api-Token: token456
+Authorization: Bearer abc123
+serviceName: my-service
+password: pass123`
+
+      const result = parseCustomHeaders(yamlInput)
+
+      expect(result).toEqual({
+        'Ocp-Apim-Subscription-Key': 'secret123',
+        'X-Api-Token': 'token456',
+        Authorization: 'Bearer abc123',
+        serviceName: 'my-service',
+        password: 'pass123',
+      })
+
+      // Sensitive headers should be masked
+      expect(core.info).toHaveBeenCalledWith('Custom header added: Ocp-Apim-Subscription-Key: ***MASKED***')
+      expect(core.info).toHaveBeenCalledWith('Custom header added: X-Api-Token: ***MASKED***')
+      expect(core.info).toHaveBeenCalledWith('Custom header added: Authorization: ***MASKED***')
+      expect(core.info).toHaveBeenCalledWith('Custom header added: password: ***MASKED***')
+
+      // Non-sensitive headers should not be masked
+      expect(core.info).toHaveBeenCalledWith('Custom header added: serviceName: my-service')
+    })
+
+    it('validates header names and skips invalid ones', () => {
+      const yamlInput = `valid-header: value1
+invalid header: value2
+another_valid: value3
+invalid@header: value4
+valid123: value5`
+
+      const result = parseCustomHeaders(yamlInput)
+
+      expect(result).toEqual({
+        'valid-header': 'value1',
+        another_valid: 'value3',
+        valid123: 'value5',
+      })
+
+      expect(core.warning).toHaveBeenCalledWith(expect.stringContaining('Skipping invalid header name: invalid header'))
+      expect(core.warning).toHaveBeenCalledWith(expect.stringContaining('Skipping invalid header name: invalid@header'))
+    })
+
+    it('warns and returns empty object for invalid JSON', () => {
+      const invalidJson = '{invalid json}'
+
+      const result = parseCustomHeaders(invalidJson)
+
+      expect(result).toEqual({})
+      expect(core.warning).toHaveBeenCalledWith(expect.stringContaining('Failed to parse custom headers'))
+    })
+
+    it('warns and returns empty object for invalid YAML', () => {
+      const invalidYaml = 'invalid: yaml: structure: bad'
+
+      const result = parseCustomHeaders(invalidYaml)
+
+      expect(result).toEqual({})
+      expect(core.warning).toHaveBeenCalledWith(expect.stringContaining('Failed to parse custom headers'))
+    })
+
+    it('warns and returns empty object for JSON array', () => {
+      const jsonArray = '["header1", "header2"]'
+
+      const result = parseCustomHeaders(jsonArray)
+
+      expect(result).toEqual({})
+      expect(core.warning).toHaveBeenCalledWith('Custom headers JSON must be an object, not an array')
+    })
+
+    it('warns and returns empty object for YAML array', () => {
+      const yamlArray = `- header1
+- header2`
+
+      const result = parseCustomHeaders(yamlArray)
+
+      expect(result).toEqual({})
+      expect(core.warning).toHaveBeenCalledWith('Custom headers YAML must be an object')
+    })
+
+    it('converts non-string values to strings', () => {
+      const jsonInput = '{"numericHeader": 123, "boolHeader": true, "nullHeader": null}'
+
+      const result = parseCustomHeaders(jsonInput)
+
+      expect(result).toEqual({
+        numericHeader: '123',
+        boolHeader: 'true',
+        nullHeader: 'null',
+      })
+    })
+
+    it('handles multiline YAML values', () => {
+      const yamlInput = `header1: value1
+header2: |
+  multiline
+  value
+  here`
+
+      const result = parseCustomHeaders(yamlInput)
+
+      expect(result.header1).toBe('value1')
+      expect(result.header2).toContain('multiline')
+    })
+
+    it('handles complex real-world Azure APIM example', () => {
+      const apimHeaders = `Ocp-Apim-Subscription-Key: my-subscription-key-123
+serviceName: terraform-plan-workflow
+env: prod
+team: infrastructure
+computer: github-actions
+systemID: terraform-ci`
+
+      const result = parseCustomHeaders(apimHeaders)
+
+      expect(result).toEqual({
+        'Ocp-Apim-Subscription-Key': 'my-subscription-key-123',
+        serviceName: 'terraform-plan-workflow',
+        env: 'prod',
+        team: 'infrastructure',
+        computer: 'github-actions',
+        systemID: 'terraform-ci',
+      })
+
+      // Only the subscription key should be masked
+      expect(core.info).toHaveBeenCalledWith('Custom header added: Ocp-Apim-Subscription-Key: ***MASKED***')
+      expect(core.info).toHaveBeenCalledWith('Custom header added: serviceName: terraform-plan-workflow')
     })
   })
 })

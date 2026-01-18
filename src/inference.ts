@@ -18,6 +18,7 @@ export interface InferenceRequest {
   temperature?: number
   topP?: number
   responseFormat?: {type: 'json_schema'; json_schema: unknown} // Processed response format for the API
+  customHeaders?: Record<string, string> // Custom HTTP headers to include in API requests
 }
 
 export interface InferenceResponse {
@@ -41,6 +42,7 @@ export async function simpleInference(request: InferenceRequest): Promise<string
   const client = new OpenAI({
     apiKey: request.token,
     baseURL: request.endpoint,
+    defaultHeaders: request.customHeaders || {},
   })
 
   const chatCompletionRequest: OpenAI.Chat.Completions.ChatCompletionCreateParams = {
@@ -75,6 +77,7 @@ export async function mcpInference(
   const client = new OpenAI({
     apiKey: request.token,
     baseURL: request.endpoint,
+    defaultHeaders: request.customHeaders || {},
   })
 
   // Start with the pre-processed messages
