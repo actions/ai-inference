@@ -58308,6 +58308,7 @@ async function simpleInference(request) {
     const client = new OpenAI({
         apiKey: request.token,
         baseURL: request.endpoint,
+        defaultHeaders: request.customHeaders || {},
     });
     const chatCompletionRequest = {
         messages: request.messages,
@@ -58334,6 +58335,7 @@ async function mcpInference(request, githubMcpClient) {
     const client = new OpenAI({
         apiKey: request.token,
         baseURL: request.endpoint,
+        defaultHeaders: request.customHeaders || {},
     });
     // Start with the pre-processed messages
     const messages = [...request.messages];
@@ -58435,90 +58437,6 @@ async function chatCompletion(client, params, context) {
         coreExports.error(`${context}: chatCompletion failed: ${err}`);
         throw err;
     }
-}
-
-/**
- * Helper function to load content from a file or use fallback input
- * @param filePathInput - Input name for the file path
- * @param contentInput - Input name for the direct content
- * @param defaultValue - Default value to use if neither file nor content is provided
- * @returns The loaded content
- */
-function loadContentFromFileOrInput(filePathInput, contentInput, defaultValue) {
-    const filePath = coreExports.getInput(filePathInput);
-    const contentString = coreExports.getInput(contentInput);
-    if (filePath !== undefined && filePath !== '') {
-        if (!fs.existsSync(filePath)) {
-            throw new Error(`File for ${filePathInput} was not found: ${filePath}`);
-        }
-        return fs.readFileSync(filePath, 'utf-8');
-    }
-    else if (contentString !== undefined && contentString !== '') {
-        return contentString;
-    }
-    else if (defaultValue !== undefined) {
-        return defaultValue;
-    }
-    else {
-        throw new Error(`Neither ${filePathInput} nor ${contentInput} was set`);
-    }
-}
-/**
- * Build messages array from either prompt config or legacy format
- */
-function buildMessages(promptConfig, systemPrompt, prompt) {
-    if (promptConfig?.messages && promptConfig.messages.length > 0) {
-        // Use new message format
-        return promptConfig.messages.map(msg => ({
-            role: msg.role,
-            content: msg.content,
-        }));
-    }
-    else {
-        // Use legacy format
-        return [
-            {
-                role: 'system',
-                content: systemPrompt || 'You are a helpful assistant',
-            },
-            { role: 'user', content: prompt || '' },
-        ];
-    }
-}
-/**
- * Build response format object for API from prompt config
- */
-function buildResponseFormat(promptConfig) {
-    if (promptConfig?.responseFormat === 'json_schema' && promptConfig.jsonSchema) {
-        try {
-            const schema = JSON.parse(promptConfig.jsonSchema);
-            return {
-                type: 'json_schema',
-                json_schema: schema,
-            };
-        }
-        catch (error) {
-            throw new Error(`Invalid JSON schema: ${error instanceof Error ? error.message : 'Unknown error'}`);
-        }
-    }
-    return undefined;
-}
-/**
- * Build complete InferenceRequest from prompt config and inputs
- */
-function buildInferenceRequest(promptConfig, systemPrompt, prompt, modelName, temperature, topP, maxTokens, endpoint, token) {
-    const messages = buildMessages(promptConfig, systemPrompt, prompt);
-    const responseFormat = buildResponseFormat(promptConfig);
-    return {
-        messages,
-        modelName,
-        temperature,
-        topP,
-        maxTokens,
-        endpoint,
-        token,
-        responseFormat,
-    };
 }
 
 /*! js-yaml 4.1.1 https://github.com/nodeca/js-yaml @license MIT */
@@ -61329,6 +61247,158 @@ var loader = {
 var load                = loader.load;
 
 /**
+ * Helper function to load content from a file or use fallback input
+ * @param filePathInput - Input name for the file path
+ * @param contentInput - Input name for the direct content
+ * @param defaultValue - Default value to use if neither file nor content is provided
+ * @returns The loaded content
+ */
+function loadContentFromFileOrInput(filePathInput, contentInput, defaultValue) {
+    const filePath = coreExports.getInput(filePathInput);
+    const contentString = coreExports.getInput(contentInput);
+    if (filePath !== undefined && filePath !== '') {
+        if (!fs.existsSync(filePath)) {
+            throw new Error(`File for ${filePathInput} was not found: ${filePath}`);
+        }
+        return fs.readFileSync(filePath, 'utf-8');
+    }
+    else if (contentString !== undefined && contentString !== '') {
+        return contentString;
+    }
+    else if (defaultValue !== undefined) {
+        return defaultValue;
+    }
+    else {
+        throw new Error(`Neither ${filePathInput} nor ${contentInput} was set`);
+    }
+}
+/**
+ * Build messages array from either prompt config or legacy format
+ */
+function buildMessages(promptConfig, systemPrompt, prompt) {
+    if (promptConfig?.messages && promptConfig.messages.length > 0) {
+        // Use new message format
+        return promptConfig.messages.map(msg => ({
+            role: msg.role,
+            content: msg.content,
+        }));
+    }
+    else {
+        // Use legacy format
+        return [
+            {
+                role: 'system',
+                content: systemPrompt || 'You are a helpful assistant',
+            },
+            { role: 'user', content: prompt || '' },
+        ];
+    }
+}
+/**
+ * Build response format object for API from prompt config
+ */
+function buildResponseFormat(promptConfig) {
+    if (promptConfig?.responseFormat === 'json_schema' && promptConfig.jsonSchema) {
+        try {
+            const schema = JSON.parse(promptConfig.jsonSchema);
+            return {
+                type: 'json_schema',
+                json_schema: schema,
+            };
+        }
+        catch (error) {
+            throw new Error(`Invalid JSON schema: ${error instanceof Error ? error.message : 'Unknown error'}`);
+        }
+    }
+    return undefined;
+}
+/**
+ * Parse custom headers from YAML or JSON format
+ * @param input - String in YAML or JSON format containing headers
+ * @returns Record of header names to values, or empty object if invalid
+ */
+function parseCustomHeaders(input) {
+    if (!input || input.trim() === '') {
+        return {};
+    }
+    const trimmedInput = input.trim();
+    try {
+        // Try JSON first (check if it starts with { or [)
+        if (trimmedInput.startsWith('{') || trimmedInput.startsWith('[')) {
+            const parsed = JSON.parse(trimmedInput);
+            if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
+                coreExports.warning('Custom headers JSON must be an object, not null or an array');
+                return {};
+            }
+            return validateAndMaskHeaders(parsed);
+        }
+        // Try YAML
+        const parsed = load(trimmedInput);
+        if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
+            coreExports.warning('Custom headers YAML must be an object');
+            return {};
+        }
+        return validateAndMaskHeaders(parsed);
+    }
+    catch (error) {
+        coreExports.warning(`Failed to parse custom headers: ${error instanceof Error ? error.message : 'Unknown error'}`);
+        return {};
+    }
+}
+/**
+ * Validate header names and mask sensitive values in logs
+ * @param headers - Raw headers object
+ * @returns Validated headers with string values
+ */
+function validateAndMaskHeaders(headers) {
+    const validHeaders = {};
+    const sensitivePatterns = ['key', 'token', 'secret', 'password', 'authorization'];
+    for (const [name, value] of Object.entries(headers)) {
+        // Validate header name (basic HTTP header name validation, RFC 7230: letters, digits, and hyphens)
+        if (!/^[A-Za-z0-9-]+$/.test(name)) {
+            coreExports.warning(`Skipping invalid header name: ${name} (only alphanumeric characters and hyphens allowed)`);
+            continue;
+        }
+        // Convert value to string
+        const stringValue = String(value);
+        // Validate header value to prevent CRLF/header injection
+        if (stringValue.includes('\r') || stringValue.includes('\n')) {
+            coreExports.warning(`Skipping header "${name}" because its value contains newline characters, which are not allowed in HTTP header values.`);
+            continue;
+        }
+        validHeaders[name] = stringValue;
+        // Mask sensitive headers in logs
+        const lowerName = name.toLowerCase();
+        const isSensitive = sensitivePatterns.some(pattern => lowerName.includes(pattern));
+        if (isSensitive) {
+            coreExports.info(`Custom header added: ${name}: ***MASKED***`);
+        }
+        else {
+            coreExports.info(`Custom header added: ${name}: ${stringValue}`);
+        }
+    }
+    return validHeaders;
+}
+/**
+ * Build complete InferenceRequest from prompt config and inputs
+ */
+function buildInferenceRequest(promptConfig, systemPrompt, prompt, modelName, temperature, topP, maxTokens, endpoint, token, customHeaders) {
+    const messages = buildMessages(promptConfig, systemPrompt, prompt);
+    const responseFormat = buildResponseFormat(promptConfig);
+    return {
+        messages,
+        modelName,
+        temperature,
+        topP,
+        maxTokens,
+        endpoint,
+        token,
+        responseFormat,
+        customHeaders,
+    };
+}
+
+/**
  * Parse template variables from YAML input string
  */
 function parseTemplateVariables(input) {
@@ -61478,8 +61548,11 @@ async function run() {
         const githubMcpToken = coreExports.getInput('github-mcp-token') || token;
         const githubMcpToolsets = coreExports.getInput('github-mcp-toolsets');
         const endpoint = coreExports.getInput('endpoint');
+        // Parse custom headers
+        const customHeadersInput = coreExports.getInput('custom-headers');
+        const customHeaders = parseCustomHeaders(customHeadersInput);
         // Build the inference request with pre-processed messages and response format
-        const inferenceRequest = buildInferenceRequest(promptConfig, systemPrompt, prompt, modelName, promptConfig?.modelParameters?.temperature, promptConfig?.modelParameters?.topP, maxTokens, endpoint, token);
+        const inferenceRequest = buildInferenceRequest(promptConfig, systemPrompt, prompt, modelName, promptConfig?.modelParameters?.temperature, promptConfig?.modelParameters?.topP, maxTokens, endpoint, token, customHeaders);
         const enableMcp = coreExports.getBooleanInput('enable-github-mcp') || false;
         let modelResponse = null;
         if (enableMcp) {

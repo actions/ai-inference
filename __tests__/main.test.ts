@@ -171,6 +171,9 @@ describe('main.ts', () => {
       endpoint: 'https://api.test.com',
       token: 'fake-token',
       responseFormat: undefined,
+      temperature: undefined,
+      topP: undefined,
+      customHeaders: {},
     })
     expect(mockConnectToGitHubMCP).not.toHaveBeenCalled()
     expect(mockMcpInference).not.toHaveBeenCalled()
@@ -259,6 +262,9 @@ describe('main.ts', () => {
       endpoint: 'https://api.test.com',
       token: 'fake-token',
       responseFormat: undefined,
+      temperature: undefined,
+      topP: undefined,
+      customHeaders: {},
     })
     verifyStandardResponse()
     expect(mockProcessExit).toHaveBeenCalledWith(0)

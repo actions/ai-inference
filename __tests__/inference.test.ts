@@ -75,6 +75,49 @@ describe('inference.ts', () => {
         max_tokens: 100,
         model: 'gpt-4',
       })
+
+      // Verify OpenAI client was initialized with empty custom headers
+      expect(mockOpenAIClient).toHaveBeenCalledWith({
+        apiKey: 'test-token',
+        baseURL: 'https://api.test.com',
+        defaultHeaders: {},
+      })
+    })
+
+    it('includes custom headers in OpenAI client', async () => {
+      const requestWithHeaders = {
+        ...mockRequest,
+        customHeaders: {
+          'X-Custom-Header': 'custom-value',
+          'Ocp-Apim-Subscription-Key': 'secret123',
+        },
+      }
+
+      const mockResponse = {
+        choices: [
+          {
+            message: {
+              content: 'Response with headers',
+            },
+          },
+        ],
+      }
+
+      mockCreate.mockResolvedValue(mockResponse)
+
+      const result = await simpleInference(requestWithHeaders)
+
+      expect(result).toBe('Response with headers')
+
+      // Verify OpenAI client was initialized with custom headers
+      expect(mockOpenAIClient).toHaveBeenCalledWith({
+        apiKey: 'test-token',
+        baseURL: 'https://api.test.com',
+        defaultHeaders: {
+          'X-Custom-Header': 'custom-value',
+          'Ocp-Apim-Subscription-Key': 'secret123',
+        },
+      })
     })
 
     it('handles null response content', async () => {
@@ -186,6 +229,50 @@ describe('inference.ts', () => {
       expect(callArgs.response_format).toBeUndefined()
       expect(callArgs.model).toBe('gpt-4')
       expect(callArgs.max_tokens).toBe(100)
+
+      // Verify OpenAI client was initialized with empty custom headers
+      expect(mockOpenAIClient).toHaveBeenCalledWith({
+        apiKey: 'test-token',
+        baseURL: 'https://api.test.com',
+        defaultHeaders: {},
+      })
+    })
+
+    it('includes custom headers in MCP inference', async () => {
+      const requestWithHeaders = {
+        ...mockRequest,
+        customHeaders: {
+          serviceName: 'test-service',
+          'X-Team': 'engineering',
+        },
+      }
+
+      const mockResponse = {
+        choices: [
+          {
+            message: {
+              content: 'MCP response with headers',
+              tool_calls: null,
+            },
+          },
+        ],
+      }
+
+      mockCreate.mockResolvedValue(mockResponse)
+
+      const result = await mcpInference(requestWithHeaders, mockMcpClient)
+
+      expect(result).toBe('MCP response with headers')
+
+      // Verify OpenAI client was initialized with custom headers
+      expect(mockOpenAIClient).toHaveBeenCalledWith({
+        apiKey: 'test-token',
+        baseURL: 'https://api.test.com',
+        defaultHeaders: {
+          serviceName: 'test-service',
+          'X-Team': 'engineering',
+        },
+      })
     })
 
     it('executes tool calls and continues conversation', async () => {

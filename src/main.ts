@@ -3,7 +3,7 @@ import * as fs from 'fs'
 import * as tmp from 'tmp'
 import {connectToGitHubMCP} from './mcp.js'
 import {simpleInference, mcpInference} from './inference.js'
-import {loadContentFromFileOrInput, buildInferenceRequest} from './helpers.js'
+import {loadContentFromFileOrInput, buildInferenceRequest, parseCustomHeaders} from './helpers.js'
 import {
   loadPromptFile,
   parseTemplateVariables,
@@ -65,6 +65,10 @@ export async function run(): Promise<void> {
 
     const endpoint = core.getInput('endpoint')
 
+    // Parse custom headers
+    const customHeadersInput = core.getInput('custom-headers')
+    const customHeaders = parseCustomHeaders(customHeadersInput)
+
     // Build the inference request with pre-processed messages and response format
     const inferenceRequest = buildInferenceRequest(
       promptConfig,
@@ -76,6 +80,7 @@ export async function run(): Promise<void> {
       maxTokens,
       endpoint,
       token,
+      customHeaders,
     )
 
     const enableMcp = core.getBooleanInput('enable-github-mcp') || false

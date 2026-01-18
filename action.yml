@@ -62,6 +62,10 @@ inputs:
     description: 'Comma-separated list of toolsets to enable for GitHub MCP (e.g., "repos,issues,pull_requests,actions"). Use "all" for all toolsets, "default" for default set. If not specified, uses default toolsets (context,repos,issues,pull_requests,users).'
     required: false
     default: ''
+  custom-headers:
+    description: 'Custom HTTP headers to include in API requests. Supports both YAML format (header1: value1) and JSON format ({"header1": "value1"}). Useful for API Management platforms, rate limiting, and request tracking.'
+    required: false
+    default: ''
 
 # Define your outputs here.
 outputs:

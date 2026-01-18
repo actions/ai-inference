@@ -156,6 +156,54 @@ steps:
       cat "${{ steps.inference.outputs.response-file }}"
 ```
 
+### Using custom headers
+
+You can include custom HTTP headers in your API requests, which is useful for integrating with API Management platforms, adding tracking information, or routing requests through custom gateways.
+
+#### YAML format (recommended for multiple headers)
+
+```yaml
+steps:
+  - name: AI Inference with Azure APIM
+    id: inference
+    uses: actions/ai-inference@v1
+    with:
+      prompt: 'Analyze this code for security issues...'
+      endpoint: ${{ secrets.APIM_ENDPOINT }}
+      token: ${{ secrets.APIM_KEY }}
+      custom-headers: |
+        Ocp-Apim-Subscription-Key: ${{ secrets.APIM_SUBSCRIPTION_KEY }}
+        serviceName: code-review-workflow
+        env: production
+        team: security
+        computer: github-actions
+```
+
+#### JSON format (alternative for compact syntax)
+
+```yaml
+steps:
+  - name: AI Inference with Custom Headers
+    id: inference
+    uses: actions/ai-inference@v1
+    with:
+      prompt: 'Hello!'
+      custom-headers: '{"X-Custom-Header": "value", "X-Team": "engineering", "X-Request-ID": "${{ github.run_id }}"}'
+```
+
+#### Use cases for custom headers
+
+- **API Management**: Integrate with Azure APIM, AWS API Gateway, Kong, or other API management platforms
+- **Request tracking**: Add correlation IDs, request IDs, or workflow identifiers
+- **Rate limiting**: Include quota or tier information for custom rate limiting
+- **Multi-tenancy**: Identify teams, services, or environments
+- **Observability**: Add metadata for logging, monitoring, and debugging
+- **Routing**: Control request routing through custom gateways or load balancers
+
+**Header name requirements**: Header names must follow the HTTP token syntax defined in RFC 7230 (which permits underscores). For maximum compatibility with intermediaries and tooling, we recommend using only alphanumeric characters and hyphens.
+
+**Security note**: Always use GitHub secrets for sensitive header values like API keys, tokens, or passwords. The action automatically masks common sensitive headers (containing `key`, `token`, `secret`, `password`, or `authorization`) in logs.
+
 ### GitHub MCP Integration (Model Context Protocol)
 
 This action now supports **read-only** integration with the GitHub-hosted Model
@@ -228,20 +276,21 @@ perform actions like searching issues and PRs.
 Various inputs are defined in [`action.yml`](action.yml) to let you configure
 the action:
 
-| Name                 | Description                                                                                                                                                   | Default                              |
-| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------ |
-| `token`              | Token to use for inference. Typically the GITHUB_TOKEN secret                                                                                                 | `github.token`                       |
-| `prompt`             | The prompt to send to the model                                                                                                                               | N/A                                  |
-| `prompt-file`        | Path to a file containing the prompt (supports .txt and .prompt.yml formats). If both `prompt` and `prompt-file` are provided, `prompt-file` takes precedence | `""`                                 |
-| `input`              | Template variables in YAML format for .prompt.yml files (e.g., `var1: value1` on separate lines)                                                              | `""`                                 |
-| `file_input`         | Template variables in YAML where values are file paths. The file contents are read and used for templating                                                    | `""`                                 |
-| `system-prompt`      | The system prompt to send to the model                                                                                                                        | `"You are a helpful assistant"`      |
-| `system-prompt-file` | Path to a file containing the system prompt. If both `system-prompt` and `system-prompt-file` are provided, `system-prompt-file` takes precedence             | `""`                                 |
-| `model`              | The model to use for inference. Must be available in the [GitHub Models](https://github.com/marketplace?type=models) catalog                                  | `openai/gpt-4o`                      |
-| `endpoint`           | The endpoint to use for inference. If you're running this as part of an org, you should probably use the org-specific Models endpoint                         | `https://models.github.ai/inference` |
-| `max-tokens`         | The max number of tokens to generate                                                                                                                          | 200                                  |
-| `enable-github-mcp`  | Enable Model Context Protocol integration with GitHub tools                                                                                                   | `false`                              |
-| `github-mcp-token`   | Token to use for GitHub MCP server (defaults to the main token if not specified).                                                                             | `""`                                 |
+| Name                 | Description                                                                                                                                                                                                        | Default                              |
+| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------ |
+| `token`              | Token to use for inference. Typically the GITHUB_TOKEN secret                                                                                                                                                      | `github.token`                       |
+| `prompt`             | The prompt to send to the model                                                                                                                                                                                    | N/A                                  |
+| `prompt-file`        | Path to a file containing the prompt (supports .txt and .prompt.yml formats). If both `prompt` and `prompt-file` are provided, `prompt-file` takes precedence                                                      | `""`                                 |
+| `input`              | Template variables in YAML format for .prompt.yml files (e.g., `var1: value1` on separate lines)                                                                                                                   | `""`                                 |
+| `file_input`         | Template variables in YAML where values are file paths. The file contents are read and used for templating                                                                                                         | `""`                                 |
+| `system-prompt`      | The system prompt to send to the model                                                                                                                                                                             | `"You are a helpful assistant"`      |
+| `system-prompt-file` | Path to a file containing the system prompt. If both `system-prompt` and `system-prompt-file` are provided, `system-prompt-file` takes precedence                                                                  | `""`                                 |
+| `model`              | The model to use for inference. Must be available in the [GitHub Models](https://github.com/marketplace?type=models) catalog                                                                                       | `openai/gpt-4o`                      |
+| `endpoint`           | The endpoint to use for inference. If you're running this as part of an org, you should probably use the org-specific Models endpoint                                                                              | `https://models.github.ai/inference` |
+| `max-tokens`         | The max number of tokens to generate                                                                                                                                                                               | 200                                  |
+| `enable-github-mcp`  | Enable Model Context Protocol integration with GitHub tools                                                                                                                                                        | `false`                              |
+| `github-mcp-token`   | Token to use for GitHub MCP server (defaults to the main token if not specified).                                                                                                                                  | `""`                                 |
+| `custom-headers`     | Custom HTTP headers to include in API requests. Supports both YAML format (`header1: value1`) and JSON format (`{"header1": "value1"}`). Useful for API Management platforms, rate limiting, and request tracking. | `""`                                 |
 
 ## Outputs
 
