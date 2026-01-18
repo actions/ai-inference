@@ -283,7 +283,52 @@ valid123: value5`
       })
     })
 
-    it('handles multiline YAML values', () => {
+    it('rejects header values with newline characters (LF)', () => {
+      const jsonInput = '{"X-Custom-Header": "value\\nwith\\nnewline", "header1": "safe-value"}'
+
+      const result = parseCustomHeaders(jsonInput)
+
+      // Only the safe header should be accepted
+      expect(result).toEqual({
+        header1: 'safe-value',
+      })
+
+      expect(core.warning).toHaveBeenCalledWith(
+        'Skipping header "X-Custom-Header" because its value contains newline characters, which are not allowed in HTTP header values.',
+      )
+    })
+
+    it('rejects header values with carriage return characters (CR)', () => {
+      const jsonInput = '{"X-Injected": "value\\rwith\\rcarriage", "X-Safe": "safe-value"}'
+
+      const result = parseCustomHeaders(jsonInput)
+
+      // Only the safe header should be accepted
+      expect(result).toEqual({
+        'X-Safe': 'safe-value',
+      })
+
+      expect(core.warning).toHaveBeenCalledWith(
+        'Skipping header "X-Injected" because its value contains newline characters, which are not allowed in HTTP header values.',
+      )
+    })
+
+    it('rejects header values with CRLF sequences', () => {
+      const jsonInput = '{"X-Attack": "value\\r\\nInjected-Header: malicious", "X-Valid": "normal"}'
+
+      const result = parseCustomHeaders(jsonInput)
+
+      // Only the valid header should be accepted
+      expect(result).toEqual({
+        'X-Valid': 'normal',
+      })
+
+      expect(core.warning).toHaveBeenCalledWith(
+        'Skipping header "X-Attack" because its value contains newline characters, which are not allowed in HTTP header values.',
+      )
+    })
+
+    it('rejects multiline YAML values for security', () => {
       const yamlInput = `header1: value1
 header2: |
   multiline
@@ -292,8 +337,14 @@ header2: |
 
       const result = parseCustomHeaders(yamlInput)
 
-      expect(result.header1).toBe('value1')
-      expect(result.header2).toContain('multiline')
+      // header2 should be rejected because it contains newlines
+      expect(result).toEqual({
+        header1: 'value1',
+      })
+
+      expect(core.warning).toHaveBeenCalledWith(
+        'Skipping header "header2" because its value contains newline characters, which are not allowed in HTTP header values.',
+      )
     })
 
     it('handles complex real-world Azure APIM example', () => {

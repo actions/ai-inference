@@ -61361,6 +61361,11 @@ function validateAndMaskHeaders(headers) {
         }
         // Convert value to string
         const stringValue = String(value);
+        // Validate header value to prevent CRLF/header injection
+        if (stringValue.includes('\r') || stringValue.includes('\n')) {
+            coreExports.warning(`Skipping header "${name}" because its value contains newline characters, which are not allowed in HTTP header values.`);
+            continue;
+        }
         validHeaders[name] = stringValue;
         // Mask sensitive headers in logs
         const lowerName = name.toLowerCase();
