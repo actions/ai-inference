@@ -200,6 +200,8 @@ steps:
 - **Observability**: Add metadata for logging, monitoring, and debugging
 - **Routing**: Control request routing through custom gateways or load balancers
 
+**Header name requirements**: Header names must contain only alphanumeric characters and hyphens (following RFC 7230). Underscores and other special characters are not allowed.
+
 **Security note**: Always use GitHub secrets for sensitive header values like API keys, tokens, or passwords. The action automatically masks common sensitive headers (containing `key`, `token`, `secret`, `password`, or `authorization`) in logs.
 
 ### GitHub MCP Integration (Model Context Protocol)

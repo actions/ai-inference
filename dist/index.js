@@ -61326,8 +61326,8 @@ function parseCustomHeaders(input) {
         // Try JSON first (check if it starts with { or [)
         if (trimmedInput.startsWith('{') || trimmedInput.startsWith('[')) {
             const parsed = JSON.parse(trimmedInput);
-            if (typeof parsed !== 'object' || Array.isArray(parsed)) {
-                coreExports.warning('Custom headers JSON must be an object, not an array');
+            if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
+                coreExports.warning('Custom headers JSON must be an object, not null or an array');
                 return {};
             }
             return validateAndMaskHeaders(parsed);
@@ -61354,9 +61354,9 @@ function validateAndMaskHeaders(headers) {
     const validHeaders = {};
     const sensitivePatterns = ['key', 'token', 'secret', 'password', 'authorization'];
     for (const [name, value] of Object.entries(headers)) {
-        // Validate header name (basic HTTP header name validation)
-        if (!/^[a-zA-Z0-9\-_]+$/.test(name)) {
-            coreExports.warning(`Skipping invalid header name: ${name} (only alphanumeric, hyphens, and underscores allowed)`);
+        // Validate header name (basic HTTP header name validation, RFC 7230: letters, digits, and hyphens)
+        if (!/^[A-Za-z0-9-]+$/.test(name)) {
+            coreExports.warning(`Skipping invalid header name: ${name} (only alphanumeric characters and hyphens allowed)`);
             continue;
         }
         // Convert value to string

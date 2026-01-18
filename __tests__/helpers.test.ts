@@ -206,7 +206,7 @@ password: pass123`
     it('validates header names and skips invalid ones', () => {
       const yamlInput = `valid-header: value1
 invalid header: value2
-another_valid: value3
+invalid_underscore: value3
 invalid@header: value4
 valid123: value5`
 
@@ -214,11 +214,13 @@ valid123: value5`
 
       expect(result).toEqual({
         'valid-header': 'value1',
-        another_valid: 'value3',
         valid123: 'value5',
       })
 
       expect(core.warning).toHaveBeenCalledWith(expect.stringContaining('Skipping invalid header name: invalid header'))
+      expect(core.warning).toHaveBeenCalledWith(
+        expect.stringContaining('Skipping invalid header name: invalid_underscore'),
+      )
       expect(core.warning).toHaveBeenCalledWith(expect.stringContaining('Skipping invalid header name: invalid@header'))
     })
 
@@ -246,7 +248,17 @@ valid123: value5`
       const result = parseCustomHeaders(jsonArray)
 
       expect(result).toEqual({})
-      expect(core.warning).toHaveBeenCalledWith('Custom headers JSON must be an object, not an array')
+      expect(core.warning).toHaveBeenCalledWith('Custom headers JSON must be an object, not null or an array')
+    })
+
+    it('warns and returns empty object for null value', () => {
+      // The string 'null' is valid YAML and gets parsed as null
+      const nullValue = 'null'
+
+      const result = parseCustomHeaders(nullValue)
+
+      expect(result).toEqual({})
+      expect(core.warning).toHaveBeenCalledWith('Custom headers YAML must be an object')
     })
 
     it('warns and returns empty object for YAML array', () => {
