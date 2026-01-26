@@ -23,7 +23,7 @@
   "license": "MIT",
   "prettier": "@github/prettier-config",
   "dependencies": {
-    "@actions/core": "^1.11.1",
+    "@actions/core": "^2.0.2",
     "@modelcontextprotocol/sdk": "^1.25.2",
     "@types/tmp": "^0.2.6",
     "js-yaml": "^4.1.1",
