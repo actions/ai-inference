@@ -24,11 +24,11 @@
   "prettier": "@github/prettier-config",
   "dependencies": {
     "@actions/core": "^1.11.1",
-    "@modelcontextprotocol/sdk": "^1.25.2",
+    "@modelcontextprotocol/sdk": "^1.25.3",
     "@types/tmp": "^0.2.6",
     "js-yaml": "^4.1.1",
     "openai": "^5.11.0",
-    "pkce-challenge": "^5.0.0",
+    "pkce-challenge": "^5.0.1",
     "tmp": "^0.2.4"
   },
   "devDependencies": {
