@@ -188,28 +188,40 @@ async function chatCompletion(
 ): Promise<OpenAI.Chat.Completions.ChatCompletion> {
   try {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    let response: any = await client.chat.completions.create(params)
+    const response: any = await client.chat.completions.create(params)
     core.debug(`${context}: raw response typeof=${typeof response}`)
 
-    if (typeof response === 'string') {
-      // Attempt to parse if we unexpectedly received a string
-      try {
-        response = JSON.parse(response)
-      } catch (e) {
-        throw new Error(
-          `${context}: Chat completion response was a string and not valid JSON (${(e as Error).message})`,
-        )
-      }
-    }
-
-    if (!response || typeof response !== 'object' || !('choices' in response)) {
-      throw new Error(`${context}: Unexpected response shape (no choices)`)
-    }
-
-    return response as OpenAI.Chat.Completions.ChatCompletion
+    return parseChatCompletionResponse(response, context)
   } catch (err) {
     // Re-throw after logging for upstream handling
     core.error(`${context}: chatCompletion failed: ${err}`)
     throw err
   }
+}
+
+/**
+ * Parses and validates the response from a chat completion request.
+ * Handles cases where the response might be a raw JSON string instead of a parsed object.
+ */
+function parseChatCompletionResponse(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  response: any,
+  context: string,
+): OpenAI.Chat.Completions.ChatCompletion {
+  if (typeof response === 'string') {
+    // Attempt to parse if we unexpectedly received a string
+    try {
+      response = JSON.parse(response)
+    } catch (e) {
+      throw new Error(
+        `${context}: Chat completion response was a string and not valid JSON (${(e as Error).message})`,
+      )
+    }
+  }
+
+  if (!response || typeof response !== 'object' || !('choices' in response)) {
+    throw new Error(`${context}: Unexpected response shape (no choices)`)
+  }
+
+  return response as OpenAI.Chat.Completions.ChatCompletion
 }
