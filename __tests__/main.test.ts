@@ -136,6 +136,7 @@ describe('main.ts', () => {
     await run()
 
     expect(core.setOutput).toHaveBeenCalled()
+    expect(core.setSecret).toHaveBeenCalledWith('fake-token')
     verifyStandardResponse()
     expect(mockProcessExit).toHaveBeenCalledWith(0)
   })
@@ -199,6 +200,7 @@ describe('main.ts', () => {
 
     await run()
 
+    expect(core.setSecret).toHaveBeenCalledWith('fake-token')
     expect(mockConnectToGitHubMCP).toHaveBeenCalledWith('fake-token', '')
     expect(mockMcpInference).toHaveBeenCalledWith(
       expect.objectContaining({
