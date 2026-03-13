@@ -135,5 +135,17 @@ describe('prompt.ts', () => {
     it('errors on missing files', () => {
       expect(() => parseFileTemplateVariables('x: ./does-not-exist.txt')).toThrow('was not found')
     })
+
+    it('errors on non-string file paths', () => {
+      expect(() => parseFileTemplateVariables('x: 123')).toThrow(
+        "File template variable 'x' must be a string file path",
+      )
+      expect(() => parseFileTemplateVariables('x: true')).toThrow(
+        "File template variable 'x' must be a string file path",
+      )
+      expect(() => parseFileTemplateVariables('x: { nested: "object" }')).toThrow(
+        "File template variable 'x' must be a string file path",
+      )
+    })
   })
 })

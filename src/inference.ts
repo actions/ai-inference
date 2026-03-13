@@ -76,7 +76,7 @@ export async function simpleInference(request: InferenceRequest): Promise<string
 
   const response = await chatCompletion(client, chatCompletionRequest, 'simpleInference')
   const modelResponse = response.choices[0]?.message?.content
-  core.info(`Model response: ${modelResponse || 'No response content'}`)
+  core.debug(`Model response: ${modelResponse || 'No response content'}`)
   return modelResponse || null
 }
 
@@ -131,7 +131,7 @@ export async function mcpInference(
       const modelResponse = assistantMessage?.content
       const toolCalls = assistantMessage?.tool_calls
 
-      core.info(`Model response: ${modelResponse || 'No response content'}`)
+      core.debug(`Model response: ${modelResponse || 'No response content'}`)
 
       messages.push({
         role: 'assistant',
@@ -196,16 +196,14 @@ async function chatCompletion(
       try {
         response = JSON.parse(response)
       } catch (e) {
-        const preview = response.slice(0, 400)
         throw new Error(
-          `${context}: Chat completion response was a string and not valid JSON (${(e as Error).message}). Preview: ${preview}`,
+          `${context}: Chat completion response was a string and not valid JSON (${(e as Error).message})`,
         )
       }
     }
 
     if (!response || typeof response !== 'object' || !('choices' in response)) {
-      const preview = JSON.stringify(response)?.slice(0, 800)
-      throw new Error(`${context}: Unexpected response shape (no choices). Preview: ${preview}`)
+      throw new Error(`${context}: Unexpected response shape (no choices)`)
     }
 
     return response as OpenAI.Chat.Completions.ChatCompletion

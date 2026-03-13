@@ -96,7 +96,7 @@ export async function connectToGitHubMCP(token: string, toolsets?: string): Prom
  * Execute a single tool call via GitHub MCP
  */
 export async function executeToolCall(githubMcpClient: Client, toolCall: ToolCall): Promise<ToolResult> {
-  core.info(`Executing GitHub MCP tool: ${toolCall.function.name} with args: ${toolCall.function.arguments}`)
+  core.debug(`Executing GitHub MCP tool: ${toolCall.function.name} with args: ${toolCall.function.arguments}`)
 
   try {
     const args = JSON.parse(toolCall.function.arguments)
@@ -106,7 +106,7 @@ export async function executeToolCall(githubMcpClient: Client, toolCall: ToolCal
       arguments: args,
     })
 
-    core.info(`GitHub MCP tool ${toolCall.function.name} executed successfully`)
+    core.debug(`GitHub MCP tool ${toolCall.function.name} executed successfully`)
 
     return {
       tool_call_id: toolCall.id,

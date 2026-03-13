@@ -61,9 +61,12 @@ export async function run(): Promise<void> {
     if (token === undefined) {
       throw new Error('GITHUB_TOKEN is not set')
     }
+    core.setSecret(token)
 
     // Get GitHub MCP token (use dedicated token if provided, otherwise fall back to main token)
     const githubMcpToken = core.getInput('github-mcp-token') || token
+    core.setSecret(githubMcpToken)
+
     const githubMcpToolsets = core.getInput('github-mcp-toolsets')
 
     const endpoint = core.getInput('endpoint')

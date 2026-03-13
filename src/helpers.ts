@@ -121,9 +121,10 @@ function validateAndMaskHeaders(headers: Record<string, unknown>): Record<string
   const sensitivePatterns = ['key', 'token', 'secret', 'password', 'authorization']
 
   for (const [name, value] of Object.entries(headers)) {
-    // Validate header name (basic HTTP header name validation, RFC 7230: letters, digits, and hyphens)
-    if (!/^[A-Za-z0-9-]+$/.test(name)) {
-      core.warning(`Skipping invalid header name: ${name} (only alphanumeric characters and hyphens allowed)`)
+    // Validate header name (RFC 7230: token = 1*tchar)
+    // tchar = "!" / "#" / "$" / "%" / "&" / "'" / "*" / "+" / "-" / "." / "^" / "_" / "`" / "|" / "~" / DIGIT / ALPHA
+    if (!/^[A-Za-z0-9!#$%&'*+\-.^_`|~]+$/.test(name)) {
+      core.warning(`Skipping invalid header name: ${name} (contains invalid characters)`)
       continue
     }
 
@@ -143,9 +144,9 @@ function validateAndMaskHeaders(headers: Record<string, unknown>): Record<string
     const lowerName = name.toLowerCase()
     const isSensitive = sensitivePatterns.some(pattern => lowerName.includes(pattern))
     if (isSensitive) {
-      core.info(`Custom header added: ${name}: ***MASKED***`)
+      core.debug(`Custom header added: ${name}: ***MASKED***`)
     } else {
-      core.info(`Custom header added: ${name}: ${stringValue}`)
+      core.debug(`Custom header added: ${name}: ${stringValue}`)
     }
   }
 

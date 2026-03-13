@@ -177,8 +177,8 @@ describe('mcp.ts', () => {
         name: 'test-tool',
         content: JSON.stringify(toolResult.content),
       })
-      expect(core.info).toHaveBeenCalledWith('Executing GitHub MCP tool: test-tool with args: {"param": "value"}')
-      expect(core.info).toHaveBeenCalledWith('GitHub MCP tool test-tool executed successfully')
+      expect(core.debug).toHaveBeenCalledWith('Executing GitHub MCP tool: test-tool with args: {"param": "value"}')
+      expect(core.debug).toHaveBeenCalledWith('GitHub MCP tool test-tool executed successfully')
     })
 
     it('handles tool execution errors gracefully', async () => {

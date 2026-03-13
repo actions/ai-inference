@@ -58,7 +58,7 @@ describe('inference.ts', () => {
 
       expect(result).toBe('Hello, user!')
       expect(core.info).toHaveBeenCalledWith('Running simple inference without tools')
-      expect(core.info).toHaveBeenCalledWith('Model response: Hello, user!')
+      expect(core.debug).toHaveBeenCalledWith('Model response: Hello, user!')
 
       // Verify the request structure
       expect(mockCreate).toHaveBeenCalledWith({
@@ -136,7 +136,7 @@ describe('inference.ts', () => {
       const result = await simpleInference(mockRequest)
 
       expect(result).toBeNull()
-      expect(core.info).toHaveBeenCalledWith('Model response: No response content')
+      expect(core.debug).toHaveBeenCalledWith('Model response: No response content')
     })
 
     it('includes response format when specified', async () => {

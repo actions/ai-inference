@@ -150,9 +150,9 @@ X-Custom-Header: custom-value`
         header2: 'value2',
         'X-Custom-Header': 'custom-value',
       })
-      expect(core.info).toHaveBeenCalledWith('Custom header added: header1: value1')
-      expect(core.info).toHaveBeenCalledWith('Custom header added: header2: value2')
-      expect(core.info).toHaveBeenCalledWith('Custom header added: X-Custom-Header: custom-value')
+      expect(core.debug).toHaveBeenCalledWith('Custom header added: header1: value1')
+      expect(core.debug).toHaveBeenCalledWith('Custom header added: header2: value2')
+      expect(core.debug).toHaveBeenCalledWith('Custom header added: X-Custom-Header: custom-value')
     })
 
     it('parses JSON format headers correctly', () => {
@@ -165,9 +165,9 @@ X-Custom-Header: custom-value`
         header2: 'value2',
         'X-Team': 'engineering',
       })
-      expect(core.info).toHaveBeenCalledWith('Custom header added: header1: value1')
-      expect(core.info).toHaveBeenCalledWith('Custom header added: header2: value2')
-      expect(core.info).toHaveBeenCalledWith('Custom header added: X-Team: engineering')
+      expect(core.debug).toHaveBeenCalledWith('Custom header added: header1: value1')
+      expect(core.debug).toHaveBeenCalledWith('Custom header added: header2: value2')
+      expect(core.debug).toHaveBeenCalledWith('Custom header added: X-Team: engineering')
     })
 
     it('returns empty object for empty input', () => {
@@ -194,13 +194,13 @@ password: pass123`
       })
 
       // Sensitive headers should be masked
-      expect(core.info).toHaveBeenCalledWith('Custom header added: Ocp-Apim-Subscription-Key: ***MASKED***')
-      expect(core.info).toHaveBeenCalledWith('Custom header added: X-Api-Token: ***MASKED***')
-      expect(core.info).toHaveBeenCalledWith('Custom header added: Authorization: ***MASKED***')
-      expect(core.info).toHaveBeenCalledWith('Custom header added: password: ***MASKED***')
+      expect(core.debug).toHaveBeenCalledWith('Custom header added: Ocp-Apim-Subscription-Key: ***MASKED***')
+      expect(core.debug).toHaveBeenCalledWith('Custom header added: X-Api-Token: ***MASKED***')
+      expect(core.debug).toHaveBeenCalledWith('Custom header added: Authorization: ***MASKED***')
+      expect(core.debug).toHaveBeenCalledWith('Custom header added: password: ***MASKED***')
 
       // Non-sensitive headers should not be masked
-      expect(core.info).toHaveBeenCalledWith('Custom header added: serviceName: my-service')
+      expect(core.debug).toHaveBeenCalledWith('Custom header added: serviceName: my-service')
     })
 
     it('validates header names and skips invalid ones', () => {
@@ -214,13 +214,11 @@ valid123: value5`
 
       expect(result).toEqual({
         'valid-header': 'value1',
+        invalid_underscore: 'value3',
         valid123: 'value5',
       })
 
       expect(core.warning).toHaveBeenCalledWith(expect.stringContaining('Skipping invalid header name: invalid header'))
-      expect(core.warning).toHaveBeenCalledWith(
-        expect.stringContaining('Skipping invalid header name: invalid_underscore'),
-      )
       expect(core.warning).toHaveBeenCalledWith(expect.stringContaining('Skipping invalid header name: invalid@header'))
     })
 
@@ -367,8 +365,8 @@ systemID: terraform-ci`
       })
 
       // Only the subscription key should be masked
-      expect(core.info).toHaveBeenCalledWith('Custom header added: Ocp-Apim-Subscription-Key: ***MASKED***')
-      expect(core.info).toHaveBeenCalledWith('Custom header added: serviceName: terraform-plan-workflow')
+      expect(core.debug).toHaveBeenCalledWith('Custom header added: Ocp-Apim-Subscription-Key: ***MASKED***')
+      expect(core.debug).toHaveBeenCalledWith('Custom header added: serviceName: terraform-plan-workflow')
     })
   })
 })
