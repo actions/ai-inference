@@ -181,6 +181,14 @@ describe('inference.ts', () => {
         response_format: requestWithResponseFormat.responseFormat,
       })
     })
+
+    it('throws error on unexpected response shape', async () => {
+      mockCreate.mockResolvedValue({})
+
+      await expect(simpleInference(mockRequest)).rejects.toThrow(
+        'simpleInference: Unexpected response shape (no choices)',
+      )
+    })
   })
 
   describe('mcpInference', () => {
@@ -631,6 +639,14 @@ describe('inference.ts', () => {
       // The function should make two calls: one normal, then one with response format
       expect(mockCreate).toHaveBeenCalledTimes(2)
       expect(result).toBe('{"immediate": "result"}')
+    })
+
+    it('throws error on unexpected response shape', async () => {
+      mockCreate.mockResolvedValue({})
+
+      await expect(mcpInference(mockRequest, mockMcpClient)).rejects.toThrow(
+        'mcpInference iteration 1: Unexpected response shape (no choices)',
+      )
     })
   })
 
