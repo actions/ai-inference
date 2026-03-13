@@ -43,7 +43,7 @@ jobs:
 
       - name: Build dist/ Directory
         id: build
-        run: npm run bundle
+        run: npm run package
 
       # This will fail the workflow if the `dist/` directory is different than
       # expected.
