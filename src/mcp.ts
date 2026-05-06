@@ -130,12 +130,5 @@ export async function executeToolCall(githubMcpClient: Client, toolCall: ToolCal
  * Execute all tool calls from a response via GitHub MCP
  */
 export async function executeToolCalls(githubMcpClient: Client, toolCalls: ToolCall[]): Promise<ToolResult[]> {
-  const toolResults: ToolResult[] = []
-
-  for (const toolCall of toolCalls) {
-    const result = await executeToolCall(githubMcpClient, toolCall)
-    toolResults.push(result)
-  }
-
-  return toolResults
+  return Promise.all(toolCalls.map(toolCall => executeToolCall(githubMcpClient, toolCall)))
 }
