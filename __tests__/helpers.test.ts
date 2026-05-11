@@ -203,6 +203,20 @@ password: pass123`
       expect(core.debug).toHaveBeenCalledWith('Custom header added: serviceName: my-service')
     })
 
+    it('masks additional sensitive header patterns', () => {
+      const yamlInput = `Cookie: session_id=12345
+X-Bearer-Token: abcdef
+Session-ID: xyz789
+X-Credentials: user:pass`
+
+      parseCustomHeaders(yamlInput)
+
+      expect(core.debug).toHaveBeenCalledWith('Custom header added: Cookie: ***MASKED***')
+      expect(core.debug).toHaveBeenCalledWith('Custom header added: X-Bearer-Token: ***MASKED***')
+      expect(core.debug).toHaveBeenCalledWith('Custom header added: Session-ID: ***MASKED***')
+      expect(core.debug).toHaveBeenCalledWith('Custom header added: X-Credentials: ***MASKED***')
+    })
+
     it('validates header names and skips invalid ones', () => {
       const yamlInput = `valid-header: value1
 invalid header: value2
