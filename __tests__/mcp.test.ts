@@ -291,5 +291,76 @@ describe('mcp.ts', () => {
       expect(results[0].content).toContain('Result 1')
       expect(results[1].content).toContain('Error:')
     })
+
+    it('executes tool calls sequentially, preserving input order in output', async () => {
+      const executionOrder: string[] = []
+
+      const toolCalls = [
+        {id: 'call-a', type: 'function', function: {name: 'tool-a', arguments: '{}'}},
+        {id: 'call-b', type: 'function', function: {name: 'tool-b', arguments: '{}'}},
+        {id: 'call-c', type: 'function', function: {name: 'tool-c', arguments: '{}'}},
+      ]
+
+      mockCallTool.mockImplementation(({name}: {name: string}) => {
+        executionOrder.push(name)
+        return Promise.resolve({content: [{type: 'text', text: `Result from ${name}`}]})
+      })
+
+      const results = await executeToolCalls(mockClient, toolCalls)
+
+      // Results must be in the same order as tool calls
+      expect(results).toHaveLength(3)
+      expect(results[0].tool_call_id).toBe('call-a')
+      expect(results[1].tool_call_id).toBe('call-b')
+      expect(results[2].tool_call_id).toBe('call-c')
+
+      // Execution order must match input order (sequential, not concurrent)
+      expect(executionOrder).toEqual(['tool-a', 'tool-b', 'tool-c'])
+    })
+
+    it('does not start the next tool call before the previous one resolves', async () => {
+      const resolved: string[] = []
+      let resolveFirst!: () => void
+
+      // First tool call blocks until we manually resolve it
+      const firstToolPromise = new Promise<{content: unknown[]}>(resolve => {
+        resolveFirst = () => {
+          resolved.push('tool-1')
+          resolve({content: [{type: 'text', text: 'Result 1'}]})
+        }
+      })
+
+      // Track when second call starts
+      let secondCallStarted = false
+      mockCallTool
+        .mockImplementationOnce(() => firstToolPromise)
+        .mockImplementationOnce(() => {
+          secondCallStarted = true
+          resolved.push('tool-2')
+          return Promise.resolve({content: [{type: 'text', text: 'Result 2'}]})
+        })
+
+      const toolCalls = [
+        {id: 'call-1', type: 'function', function: {name: 'tool-1', arguments: '{}'}},
+        {id: 'call-2', type: 'function', function: {name: 'tool-2', arguments: '{}'}},
+      ]
+
+      const resultsPromise = executeToolCalls(mockClient, toolCalls)
+
+      // Before resolving the first tool, the second should not have started
+      await new Promise(r => setTimeout(r, 0))
+      expect(secondCallStarted).toBe(false)
+
+      // Now resolve the first tool
+      resolveFirst()
+
+      const results = await resultsPromise
+
+      // After completion, second tool should have run and in correct order
+      expect(secondCallStarted).toBe(true)
+      expect(resolved).toEqual(['tool-1', 'tool-2'])
+      expect(results[0].tool_call_id).toBe('call-1')
+      expect(results[1].tool_call_id).toBe('call-2')
+    })
   })
 })
