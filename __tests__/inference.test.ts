@@ -181,6 +181,22 @@ describe('inference.ts', () => {
         response_format: requestWithResponseFormat.responseFormat,
       })
     })
+
+    it('throws an error when response is a string but not valid JSON', async () => {
+      mockCreate.mockResolvedValue('invalid-json')
+
+      await expect(simpleInference(mockRequest)).rejects.toThrow(
+        /simpleInference: Chat completion response was a string and not valid JSON \(Unexpected token 'i', "invalid-json" is not valid JSON\)|simpleInference: Chat completion response was a string and not valid JSON \(Unexpected token i in JSON at position 0\)/,
+      )
+    })
+
+    it('throws an error when response shape is unexpected (no choices)', async () => {
+      mockCreate.mockResolvedValue({foo: 'bar'})
+
+      await expect(simpleInference(mockRequest)).rejects.toThrow(
+        'simpleInference: Unexpected response shape (no choices)',
+      )
+    })
   })
 
   describe('mcpInference', () => {
