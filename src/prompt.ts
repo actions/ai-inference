@@ -48,42 +48,67 @@ export function parseTemplateVariables(input: string): TemplateVariables {
 /**
  * Parse file-based template variables from YAML input string. The YAML should map
  * variable names to file paths. File contents are read and returned as variables.
+ *
+ * Reads files asynchronously in batches to avoid blocking the event loop and to
+ * cap memory/file-descriptor pressure when many files are configured.
  */
-export function parseFileTemplateVariables(fileInput: string): TemplateVariables {
+export async function parseFileTemplateVariables(fileInput: string): Promise<TemplateVariables> {
   if (!fileInput.trim()) {
     return {}
   }
 
+  // Parse and validate YAML structure synchronously up-front so user-input errors
+  // surface immediately and consistently with the previous (sync) implementation.
+  let entries: Array<[string, string]>
   try {
     const parsed = yaml.load(fileInput) as Record<string, unknown>
     if (typeof parsed !== 'object' || parsed === null) {
       throw new Error('File template variables must be a YAML object')
     }
 
-    const result: TemplateVariables = {}
+    entries = []
     for (const [key, value] of Object.entries(parsed)) {
       if (typeof value !== 'string') {
         throw new Error(`File template variable '${key}' must be a string file path`)
       }
-      const filePath = value
-      if (!fs.existsSync(filePath)) {
-        throw new Error(`File for template variable '${key}' was not found: ${filePath}`)
-      }
-      try {
-        result[key] = fs.readFileSync(filePath, 'utf-8')
-      } catch (err) {
-        throw new Error(
-          `Failed to read file for template variable '${key}' at path '${filePath}': ${err instanceof Error ? err.message : 'Unknown error'}`,
-        )
-      }
+      entries.push([key, value])
     }
-
-    return result
   } catch (error) {
     throw new Error(
       `Failed to parse file template variables: ${error instanceof Error ? error.message : 'Unknown error'}`,
     )
   }
+
+  // Read files in batches with non-blocking async I/O. Batching prevents opening
+  // an unbounded number of file descriptors at once for large configs.
+  const BATCH_SIZE = 100
+  const result: TemplateVariables = {}
+
+  for (let i = 0; i < entries.length; i += BATCH_SIZE) {
+    const batch = entries.slice(i, i + BATCH_SIZE)
+    const batchResults = await Promise.all(
+      batch.map(async ([key, filePath]): Promise<[string, string]> => {
+        try {
+          const content = await fs.promises.readFile(filePath, 'utf-8')
+          return [key, content]
+        } catch (err) {
+          const code = (err as NodeJS.ErrnoException)?.code
+          if (code === 'ENOENT') {
+            throw new Error(`File for template variable '${key}' was not found: ${filePath}`)
+          }
+          throw new Error(
+            `Failed to read file for template variable '${key}' at path '${filePath}': ${err instanceof Error ? err.message : 'Unknown error'}`,
+          )
+        }
+      }),
+    )
+
+    for (const [key, content] of batchResults) {
+      result[key] = content
+    }
+  }
+
+  return result
 }
 
 /**
