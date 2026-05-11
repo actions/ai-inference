@@ -1,0 +1,3 @@
+messages:
+  - role: not_a_valid_role
+    content: This message has an invalid role.
