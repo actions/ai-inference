@@ -33,7 +33,7 @@ export async function run(): Promise<void> {
 
       // Parse template variables from both string inputs and file-based inputs
       const stringVars = parseTemplateVariables(inputVariables)
-      const fileVars = parseFileTemplateVariables(fileInputVariables)
+      const fileVars = await parseFileTemplateVariables(fileInputVariables)
       const templateVariables = {...stringVars, ...fileVars}
 
       // Load and process prompt file

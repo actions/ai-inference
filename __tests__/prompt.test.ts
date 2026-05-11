@@ -125,25 +125,25 @@ describe('prompt.ts', () => {
   })
 
   describe('parseFileTemplateVariables', () => {
-    it('reads file contents for variables', () => {
+    it('reads file contents for variables', async () => {
       const configPath = path.join(__dirname, '../__fixtures__/prompts/json-schema.prompt.yml')
-      const data = parseFileTemplateVariables(`sample: ${configPath}`)
+      const data = await parseFileTemplateVariables(`sample: ${configPath}`)
       expect(data.sample).toContain('messages:')
       expect(data.sample).toContain('responseFormat:')
     })
 
-    it('errors on missing files', () => {
-      expect(() => parseFileTemplateVariables('x: ./does-not-exist.txt')).toThrow('was not found')
+    it('errors on missing files', async () => {
+      await expect(parseFileTemplateVariables('x: ./does-not-exist.txt')).rejects.toThrow('was not found')
     })
 
-    it('errors on non-string file paths', () => {
-      expect(() => parseFileTemplateVariables('x: 123')).toThrow(
+    it('errors on non-string file paths', async () => {
+      await expect(parseFileTemplateVariables('x: 123')).rejects.toThrow(
         "File template variable 'x' must be a string file path",
       )
-      expect(() => parseFileTemplateVariables('x: true')).toThrow(
+      await expect(parseFileTemplateVariables('x: true')).rejects.toThrow(
         "File template variable 'x' must be a string file path",
       )
-      expect(() => parseFileTemplateVariables('x: { nested: "object" }')).toThrow(
+      await expect(parseFileTemplateVariables('x: { nested: "object" }')).rejects.toThrow(
         "File template variable 'x' must be a string file path",
       )
     })
