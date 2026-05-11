@@ -198,13 +198,13 @@ describe('inference.ts', () => {
       )
     })
 
-    it('throws an error when response is a valid JSON string that does not contain choices', async () => {
-      // A valid JSON string (e.g. a serialized object) is still an unexpected response shape
+    it('successfully parses a valid JSON string response that contains choices', async () => {
+      // A valid JSON string with choices will be parsed and treated as a normal response
       mockCreate.mockResolvedValue('{"choices":[{"message":{"content":"hi"}}]}')
 
-      await expect(simpleInference(mockRequest)).rejects.toThrow(
-        /simpleInference: Chat completion response was a string and not valid JSON|simpleInference: Unexpected response shape/,
-      )
+      const result = await simpleInference(mockRequest)
+
+      expect(result).toBe('hi')
     })
 
     it('throws an error when response is an empty object (no choices property)', async () => {
