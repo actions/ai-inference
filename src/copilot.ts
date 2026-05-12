@@ -91,7 +91,11 @@ export async function copilotInference(
 
   const fullPrompt = systemMessage ? `${systemMessage}\n\n${prompt}` : prompt
 
-  const args = ['-p', fullPrompt, '--no-ask-user']
+  // -s (silent): suppress session metadata so stdout is the model response only.
+  // --no-ask-user: never block on clarifying questions in CI.
+  // No --allow-tool flags are passed by default, so Copilot is denied permission
+  // to use shell, write, fetch, etc. unless the consumer opts in via copilot-allow-tools.
+  const args = ['-p', fullPrompt, '-s', '--no-ask-user']
 
   // Only forward --model when the user explicitly picked something other than
   // the GitHub Models default (which is not a valid Copilot model).

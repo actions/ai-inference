@@ -272,7 +272,8 @@ Notes when `provider: copilot`:
 - The Copilot CLI must be on `PATH` (or pass `copilot-cli-path`) and authenticated via `COPILOT_GITHUB_TOKEN` (or another env var Copilot CLI accepts) before this action runs.
 - The action's default model (`openai/gpt-4o`) is a GitHub Models identifier and is not forwarded to Copilot. Set `model:` to a Copilot-compatible model (e.g. `gpt-4.1`, `claude-sonnet-4.5`) when you want to override the CLI default.
 - `enable-github-mcp`, `custom-headers`, `endpoint`, and `responseFormat` / `jsonSchema` are ignored under this provider — Copilot has its own tools and configuration mechanism. Use `copilot-allow-tools` (e.g. `shell(git:*),write`) to opt in to specific Copilot tools.
-- The action invokes the CLI with `-p <prompt> --no-ask-user`, so it never blocks on interactive prompts.
+- The action invokes the CLI with `-p <prompt> -s --no-ask-user`, so it never blocks on interactive prompts and stdout is just the model response.
+- **Permissions are denied by default.** No `--allow-tool` flags are passed unless you set `copilot-allow-tools`, so Copilot can't run shell commands, write files, or fetch URLs out of the box.
 
 ### GitHub MCP Integration (Model Context Protocol)
 

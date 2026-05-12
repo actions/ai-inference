@@ -78,6 +78,7 @@ describe('copilotInference', () => {
     expect(args[0]).toBe('-p')
     expect(args[1]).toBe('Be brief.\n\nSay hi.')
     expect(args).toContain('--no-ask-user')
+    expect(args).toContain('-s')
     // Default github-models model should NOT be forwarded
     expect(args).not.toContain('--model')
   })
