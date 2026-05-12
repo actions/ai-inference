@@ -147,8 +147,8 @@ describe('copilotInference', () => {
     ).rejects.toThrow(/Copilot CLI not found/)
   })
 
-  it('throws on non-zero exit code with stderr context', async () => {
-    const spawner = makeSpawner({stdout: '', stderr: 'auth failed\nbad token', exitCode: 2})
+  it('throws on non-zero exit code without leaking stderr', async () => {
+    const spawner = makeSpawner({stdout: '', stderr: 'auth failed\nsecret-bearer-token-abc123', exitCode: 2})
 
     await expect(
       copilotInference(
@@ -158,7 +158,18 @@ describe('copilotInference', () => {
         },
         spawner,
       ),
-    ).rejects.toThrow(/exited with code 2.*bad token/s)
+    ).rejects.toThrow(/exited with code 2.*ACTIONS_STEP_DEBUG/s)
+
+    // Make sure the stderr contents are NOT in the thrown error message
+    await expect(
+      copilotInference(
+        {
+          messages: [{role: 'user', content: 'hi'}],
+          model: '',
+        },
+        makeSpawner({stdout: '', stderr: 'secret-bearer-token-abc123', exitCode: 2}),
+      ),
+    ).rejects.toThrow(expect.not.stringMatching(/secret-bearer-token-abc123/))
   })
 
   it('returns null when stdout is empty', async () => {

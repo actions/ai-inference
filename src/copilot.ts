@@ -114,6 +114,13 @@ export async function copilotInference(
 
   core.info(`Running Copilot CLI: ${cmd} -p <prompt> ${args.slice(2).join(' ')}`)
 
+  // Mask the Copilot token if it's set, so any accidental echo into stdout/
+  // stderr/debug logs from the CLI gets ***-ified by the runner.
+  const copilotToken = process.env['COPILOT_GITHUB_TOKEN'] || process.env['GH_TOKEN'] || process.env['GITHUB_TOKEN']
+  if (copilotToken) {
+    core.setSecret(copilotToken)
+  }
+
   let result: RunResult
   try {
     result = await spawner(cmd, args)
@@ -127,13 +134,17 @@ export async function copilotInference(
     throw new Error(`Failed to spawn Copilot CLI: ${message}`)
   }
 
+  // Stderr may contain prompt content, file paths, or other context. Only emit
+  // it to debug logs (opt-in via ACTIONS_STEP_DEBUG) to avoid leaking it into
+  // every workflow log. The error path also intentionally omits stderr.
   if (result.stderr.trim()) {
     core.debug(`Copilot CLI stderr: ${result.stderr}`)
   }
 
   if (result.exitCode !== 0) {
-    const stderrTail = result.stderr.trim().split('\n').slice(-10).join('\n')
-    throw new Error(`Copilot CLI exited with code ${result.exitCode}: ${stderrTail || '(no stderr output)'}`)
+    throw new Error(
+      `Copilot CLI exited with code ${result.exitCode}. Re-run the workflow with ACTIONS_STEP_DEBUG=true to see the CLI's stderr output.`,
+    )
   }
 
   const response = result.stdout.trim()
