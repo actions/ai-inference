@@ -91,6 +91,8 @@ const mockConnectToGitHubMCP = vi.fn() as MockedFunction<any>
 const mockSimpleInference = vi.fn() as MockedFunction<any>
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const mockMcpInference = vi.fn() as MockedFunction<any>
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const mockCopilotInference = vi.fn() as MockedFunction<any>
 
 vi.mock('../src/mcp.js', () => ({
   connectToGitHubMCP: mockConnectToGitHubMCP,
@@ -99,6 +101,10 @@ vi.mock('../src/mcp.js', () => ({
 vi.mock('../src/inference.js', () => ({
   simpleInference: mockSimpleInference,
   mcpInference: mockMcpInference,
+}))
+
+vi.mock('../src/copilot.js', () => ({
+  copilotInference: mockCopilotInference,
 }))
 
 vi.mock('@actions/core', () => core)
@@ -125,6 +131,7 @@ describe('main.ts', () => {
     // Set up default mock responses
     mockSimpleInference.mockResolvedValue('Hello, user!')
     mockMcpInference.mockResolvedValue('Hello, user!')
+    mockCopilotInference.mockResolvedValue('Hello, user!')
   })
 
   it('Sets the response output', async () => {
@@ -308,5 +315,82 @@ describe('main.ts', () => {
     expect(mockWriteFileSync).toHaveBeenCalledWith('/secure/temp/dir/modelResponse-abc123.txt', 'Hello, user!', 'utf-8')
 
     expect(mockProcessExit).toHaveBeenCalledWith(0)
+  })
+
+  it('routes to copilot inference when provider is "copilot"', async () => {
+    mockInputs({
+      prompt: 'Hello, AI!',
+      'system-prompt': 'You are a test assistant.',
+      provider: 'copilot',
+    })
+
+    await run()
+
+    expect(mockCopilotInference).toHaveBeenCalledWith({
+      messages: [
+        {role: 'system', content: 'You are a test assistant.'},
+        {role: 'user', content: 'Hello, AI!'},
+      ],
+      model: 'gpt-4',
+      cliPath: undefined,
+      allowTools: [],
+    })
+    expect(mockSimpleInference).not.toHaveBeenCalled()
+    expect(mockMcpInference).not.toHaveBeenCalled()
+    verifyStandardResponse()
+    expect(mockProcessExit).toHaveBeenCalledWith(0)
+  })
+
+  it('forwards copilot-cli-path and copilot-allow-tools to copilot inference', async () => {
+    mockInputs({
+      prompt: 'Hello, AI!',
+      'system-prompt': 'You are a test assistant.',
+      provider: 'copilot',
+      'copilot-cli-path': '/opt/copilot/bin/copilot',
+      'copilot-allow-tools': 'shell(git:*), write',
+      model: 'gpt-4.1',
+    })
+
+    await run()
+
+    expect(mockCopilotInference).toHaveBeenCalledWith({
+      messages: [
+        {role: 'system', content: 'You are a test assistant.'},
+        {role: 'user', content: 'Hello, AI!'},
+      ],
+      model: 'gpt-4.1',
+      cliPath: '/opt/copilot/bin/copilot',
+      allowTools: ['shell(git:*)', 'write'],
+    })
+    expect(mockProcessExit).toHaveBeenCalledWith(0)
+  })
+
+  it('warns and skips MCP when provider is "copilot" and enable-github-mcp is true', async () => {
+    mockInputs({
+      prompt: 'Hello, AI!',
+      'system-prompt': 'You are a test assistant.',
+      provider: 'copilot',
+      'enable-github-mcp': 'true',
+    })
+
+    await run()
+
+    expect(core.warning).toHaveBeenCalledWith('enable-github-mcp is ignored when provider is "copilot"')
+    expect(mockConnectToGitHubMCP).not.toHaveBeenCalled()
+    expect(mockMcpInference).not.toHaveBeenCalled()
+    expect(mockCopilotInference).toHaveBeenCalled()
+    expect(mockProcessExit).toHaveBeenCalledWith(0)
+  })
+
+  it('fails when provider is unsupported', async () => {
+    mockInputs({
+      prompt: 'Hello, AI!',
+      provider: 'magic-llm',
+    })
+
+    await run()
+
+    expect(core.setFailed).toHaveBeenCalledWith(expect.stringContaining('Unsupported provider "magic-llm"'))
+    expect(mockProcessExit).toHaveBeenCalledWith(1)
   })
 })
