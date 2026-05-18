@@ -12,8 +12,8 @@ interface ChatMessage {
 export interface InferenceRequest {
   messages: Array<{role: 'system' | 'user' | 'assistant' | 'tool'; content: string}>
   modelName: string
-  maxTokens?: number // Deprecated
   maxCompletionTokens?: number
+  maxCompletionTokensParam?: 'max_tokens' | 'max_completion_tokens'
   endpoint: string
   token: string
   temperature?: number
@@ -35,17 +35,19 @@ export interface InferenceResponse {
 }
 
 /**
- * Build according to what input was passed, default to max_tokens.
- * Only one of max_tokens or max_completion_tokens will be set.
+ * Build according to what input was passed.
+ * Maps the maxCompletionTokens to the appropriate API parameter name.
  */
-function buildMaxTokensParam(request: InferenceRequest): {max_tokens?: number; max_completion_tokens?: number} {
-  if (request.maxCompletionTokens != null) {
-    return {max_completion_tokens: request.maxCompletionTokens}
+export function buildMaxTokensParam(request: InferenceRequest): {
+  max_tokens?: number
+  max_completion_tokens?: number
+} {
+  if (request.maxCompletionTokens == null) {
+    return {}
   }
-  if (request.maxTokens != null) {
-    return {max_tokens: request.maxTokens}
-  }
-  return {}
+
+  const paramName = request.maxCompletionTokensParam || 'max_completion_tokens'
+  return {[paramName]: request.maxCompletionTokens}
 }
 
 /**

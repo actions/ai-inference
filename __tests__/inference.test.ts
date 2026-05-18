@@ -32,6 +32,7 @@ describe('inference.ts', () => {
     ],
     modelName: 'gpt-4',
     maxCompletionTokens: 100,
+    maxCompletionTokensParam: 'max_completion_tokens' as const,
     endpoint: 'https://api.test.com',
     token: 'test-token',
   }
@@ -668,11 +669,11 @@ describe('inference.ts', () => {
   })
 
   describe('token param routing', () => {
-    it('sends max_tokens when only maxTokens is set', async () => {
+    it('sends max_tokens when maxCompletionTokensParam is set to max_tokens', async () => {
       const requestWithMaxTokens = {
         ...mockRequest,
-        maxCompletionTokens: undefined,
-        maxTokens: 100,
+        maxCompletionTokens: 100,
+        maxCompletionTokensParam: 'max_tokens' as const,
       }
 
       const mockResponse = {
@@ -701,7 +702,7 @@ describe('inference.ts', () => {
       const requestWithNoTokens = {
         ...mockRequest,
         maxCompletionTokens: undefined,
-        maxTokens: undefined,
+        maxCompletionTokensParam: undefined,
       }
 
       const mockResponse = {
