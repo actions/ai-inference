@@ -41,9 +41,16 @@ describe('prompt.ts', () => {
       expect(result).toEqual({})
     })
 
-    it('should throw error for invalid YAML', () => {
-      const input = 'invalid: yaml: content:'
-      expect(() => parseTemplateVariables(input)).toThrow()
+    it('should throw error for invalid YAML with wrapped message', () => {
+      const input = 'invalid: : :'
+      expect(() => parseTemplateVariables(input)).toThrow(/Failed to parse template variables: .*/)
+    })
+
+    it('should throw error when input is not a YAML object', () => {
+      const input = '"just a string"'
+      expect(() => parseTemplateVariables(input)).toThrow(
+        'Failed to parse template variables: Template variables must be a YAML object',
+      )
     })
   })
 
@@ -156,6 +163,12 @@ describe('prompt.ts', () => {
       )
       await expect(parseFileTemplateVariables('x: { nested: "object" }')).rejects.toThrow(
         "File template variable 'x' must be a string file path",
+      )
+    })
+
+    it('errors on invalid YAML with wrapped message', async () => {
+      await expect(parseFileTemplateVariables('invalid: : :')).rejects.toThrow(
+        /Failed to parse file template variables: .*/,
       )
     })
   })
