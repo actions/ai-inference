@@ -1,4 +1,4 @@
-import {vi, it, expect, beforeEach, describe} from 'vitest'
+import {vi, it, expect, beforeEach, afterEach, describe} from 'vitest'
 import * as core from '../__fixtures__/core.js'
 
 const mockExistsSync = vi.fn()
@@ -11,7 +11,7 @@ vi.mock('fs', () => ({
 
 vi.mock('@actions/core', () => core)
 
-const {loadContentFromFileOrInput, parseCustomHeaders} = await import('../src/helpers.js')
+const {loadContentFromFileOrInput, parseCustomHeaders, safeExit} = await import('../src/helpers.js')
 
 describe('helpers.ts', () => {
   beforeEach(() => {
@@ -367,6 +367,54 @@ systemID: terraform-ci`
       // Only the subscription key should be masked
       expect(core.debug).toHaveBeenCalledWith('Custom header added: Ocp-Apim-Subscription-Key: ***MASKED***')
       expect(core.debug).toHaveBeenCalledWith('Custom header added: serviceName: terraform-plan-workflow')
+    })
+  })
+
+  describe('safeExit', () => {
+    const originalPlatform = process.platform
+    let exitSpy: ReturnType<typeof vi.spyOn>
+
+    beforeEach(() => {
+      // Stub process.exit so the test runner doesn't actually exit.
+      exitSpy = vi.spyOn(process, 'exit').mockImplementation((() => undefined) as never)
+    })
+
+    afterEach(() => {
+      Object.defineProperty(process, 'platform', {value: originalPlatform})
+      exitSpy.mockRestore()
+      vi.useRealTimers()
+    })
+
+    it('calls process.exit with the given code on non-Windows without delay', async () => {
+      Object.defineProperty(process, 'platform', {value: 'linux'})
+      vi.useFakeTimers()
+      const p = safeExit(0)
+      // Resolve any microtasks; no setTimeout should be pending on non-Windows.
+      await vi.advanceTimersByTimeAsync(0)
+      await p
+      expect(exitSpy).toHaveBeenCalledWith(0)
+      expect(vi.getTimerCount()).toBe(0)
+    })
+
+    it('forwards a non-zero code unchanged', async () => {
+      Object.defineProperty(process, 'platform', {value: 'darwin'})
+      await safeExit(1)
+      expect(exitSpy).toHaveBeenCalledWith(1)
+    })
+
+    it('waits 100ms before exiting on Windows (dodges nodejs/node#56645)', async () => {
+      Object.defineProperty(process, 'platform', {value: 'win32'})
+      vi.useFakeTimers()
+      const p = safeExit(0)
+
+      // Before 100ms, exit must not have been called yet.
+      await vi.advanceTimersByTimeAsync(99)
+      expect(exitSpy).not.toHaveBeenCalled()
+
+      // At 100ms, the delay resolves and exit fires.
+      await vi.advanceTimersByTimeAsync(1)
+      await p
+      expect(exitSpy).toHaveBeenCalledWith(0)
     })
   })
 })

@@ -5,6 +5,22 @@ import {PromptConfig} from './prompt.js'
 import {InferenceRequest} from './inference.js'
 
 /**
+ * Force-exit the process to avoid hanging on open connections.
+ *
+ * On Windows, briefly yield first so undici can finish closing TLS sockets;
+ * otherwise the process aborts with a libuv UV_HANDLE_CLOSING assertion in
+ * `src\win\async.c`. See https://github.com/nodejs/node/issues/56645.
+ *
+ * @param code - The exit code to pass to `process.exit`.
+ */
+export async function safeExit(code: number): Promise<never> {
+  if (process.platform === 'win32') {
+    await new Promise(resolve => setTimeout(resolve, 100))
+  }
+  process.exit(code)
+}
+
+/**
  * Helper function to load content from a file or use fallback input
  * @param filePathInput - Input name for the file path
  * @param contentInput - Input name for the direct content
