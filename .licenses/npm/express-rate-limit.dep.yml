@@ -1,6 +1,6 @@
 ---
 name: express-rate-limit
-version: 7.5.1
+version: 8.3.1
 type: npm
 summary: Basic IP rate-limiting middleware for Express. Use to limit repeated requests
   to public APIs and/or endpoints such as password reset.
@@ -25,6 +25,6 @@ licenses:
 - sources: readme.md
   text: "MIT © [Nathan Friedly](http://nfriedly.com/),\n[Vedant K](https://github.com/gamemaker1)\n\n[`windowMs`]:\n\thttps://express-rate-limit.mintlify.app/reference/configuration#windowms\n[`limit`]:
     https://express-rate-limit.mintlify.app/reference/configuration#limit\n[`message`]:\n\thttps://express-rate-limit.mintlify.app/reference/configuration#message\n[`statusCode`]:\n\thttps://express-rate-limit.mintlify.app/reference/configuration#statuscode\n[`handler`]:\n\thttps://express-rate-limit.mintlify.app/reference/configuration#handler\n[`legacyHeaders`]:\n\thttps://express-rate-limit.mintlify.app/reference/configuration#legacyheaders\n[`standardHeaders`]:\n\thttps://express-rate-limit.mintlify.app/reference/configuration#standardheaders\n[`identifier`]:\n\thttps://express-rate-limit.mintlify.app/reference/configuration#identifier\n[`store`]:
-    https://express-rate-limit.mintlify.app/reference/configuration#store\n[`passOnStoreError`]:\n\thttps://express-rate-limit.mintlify.app/reference/configuration#passOnStoreError\n[`keyGenerator`]:\n\thttps://express-rate-limit.mintlify.app/reference/configuration#keygenerator\n[`requestPropertyName`]:\n\thttps://express-rate-limit.mintlify.app/reference/configuration#requestpropertyname\n[`skip`]:
+    https://express-rate-limit.mintlify.app/reference/configuration#store\n[`passOnStoreError`]:\n\thttps://express-rate-limit.mintlify.app/reference/configuration#passonstoreerror\n[`keyGenerator`]:\n\thttps://express-rate-limit.mintlify.app/reference/configuration#keygenerator\n[`ipv6Subnet`]:\n\thttps://express-rate-limit.mintlify.app/reference/configuration#ipv6subnet\n[`requestPropertyName`]:\n\thttps://express-rate-limit.mintlify.app/reference/configuration#requestpropertyname\n[`skip`]:
     https://express-rate-limit.mintlify.app/reference/configuration#skip\n[`skipSuccessfulRequests`]:\n\thttps://express-rate-limit.mintlify.app/reference/configuration#skipsuccessfulrequests\n[`skipFailedRequests`]:\n\thttps://express-rate-limit.mintlify.app/reference/configuration#skipfailedrequests\n[`requestWasSuccessful`]:\n\thttps://express-rate-limit.mintlify.app/reference/configuration#requestwassuccessful\n[`validate`]:\n\thttps://express-rate-limit.mintlify.app/reference/configuration#validate"
 notices: []
