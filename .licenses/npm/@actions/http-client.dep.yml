@@ -1,6 +1,6 @@
 ---
 name: "@actions/http-client"
-version: 2.2.3
+version: 4.0.0
 type: npm
 summary: Actions Http Client
 homepage: https://github.com/actions/toolkit/tree/main/packages/http-client

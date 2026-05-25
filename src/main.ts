@@ -4,7 +4,7 @@ import * as tmp from 'tmp'
 import {connectToGitHubMCP} from './mcp.js'
 import {simpleInference, mcpInference} from './inference.js'
 import {copilotInference} from './copilot.js'
-import {loadContentFromFileOrInput, buildInferenceRequest, parseCustomHeaders} from './helpers.js'
+import {loadContentFromFileOrInput, buildInferenceRequest, parseCustomHeaders, safeExit} from './helpers.js'
 import {
   loadPromptFile,
   parseTemplateVariables,
@@ -173,10 +173,8 @@ export async function run(): Promise<void> {
     } else {
       core.setFailed(`An unexpected error occurred: ${JSON.stringify(error, null, 2)}`)
     }
-    // Force exit to prevent hanging on open connections
-    process.exit(1)
+    await safeExit(1)
   }
 
-  // Force exit to prevent hanging on open connections
-  process.exit(0)
+  await safeExit(0)
 }
