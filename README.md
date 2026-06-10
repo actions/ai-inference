@@ -5,240 +5,16 @@
 [![Check dist/](https://github.com/actions/typescript-action/actions/workflows/check-dist.yml/badge.svg)](https://github.com/actions/typescript-action/actions/workflows/check-dist.yml)
 [![CodeQL](https://github.com/actions/typescript-action/actions/workflows/codeql-analysis.yml/badge.svg)](https://github.com/actions/typescript-action/actions/workflows/codeql-analysis.yml)
 
-Use AI models from [GitHub Models](https://github.com/marketplace/models) in
-your workflows.
+Run AI inference in workflows using the GitHub Copilot CLI.
 
 ## Usage
 
-Create a workflow to use the AI inference action:
+The action is Copilot-only. The `provider` input defaults to `copilot`, and `copilot` is the only supported value.
+
+Because the Copilot CLI is not pre-installed on GitHub-hosted runners, install and authenticate it before invoking this action.
 
 ```yaml
-name: 'AI inference'
-on: workflow_dispatch
-
-jobs:
-  inference:
-    permissions:
-      models: read
-    runs-on: ubuntu-latest
-    steps:
-      - name: Test Local Action
-        id: inference
-        uses: actions/ai-inference@v1
-        with:
-          prompt: 'Hello!'
-
-      - name: Print Output
-        id: output
-        run: echo "${{ steps.inference.outputs.response }}"
-```
-
-### Using a prompt file
-
-You can also provide a prompt file instead of an inline prompt. The action
-supports both plain text files and structured `.prompt.yml` files:
-
-```yaml
-steps:
-  - name: Run AI Inference with Text File
-    id: inference
-    uses: actions/ai-inference@v1
-    with:
-      prompt-file: './path/to/prompt.txt'
-```
-
-### Using GitHub prompt.yml files
-
-For more advanced use cases, you can use structured `.prompt.yml` files that
-support templating, custom models, and JSON schema responses:
-
-```yaml
-steps:
-  - name: Run AI Inference with Prompt YAML
-    id: inference
-    uses: actions/ai-inference@v1
-    with:
-      prompt-file: './.github/prompts/sample.prompt.yml'
-      input: |
-        var1: hello
-        var2: ${{ steps.some-step.outputs.output }}
-        var3: |
-          Lorem Ipsum
-          Hello World
-      file_input: |
-        var4: ./path/to/long-text.txt
-        var5: ./path/to/config.json
-```
-
-#### Simple prompt.yml example
-
-```yaml
-messages:
-  - role: system
-    content: Be as concise as possible
-  - role: user
-    content: 'Compare {{a}} and {{b}}, please'
-model: openai/gpt-4o
-```
-
-#### Prompt.yml with JSON schema support
-
-```yaml
-messages:
-  - role: system
-    content: You are a helpful assistant that describes animals using JSON format
-  - role: user
-    content: |-
-      Describe a {{animal}}
-      Use JSON format as specified in the response schema
-model: openai/gpt-4o
-responseFormat: json_schema
-jsonSchema: |-
-  {
-    "name": "describe_animal",
-    "strict": true,
-    "schema": {
-      "type": "object",
-      "properties": {
-        "name": {
-          "type": "string",
-          "description": "The name of the animal"
-        },
-        "habitat": {
-          "type": "string",
-          "description": "The habitat the animal lives in"
-        }
-      },
-      "additionalProperties": false,
-      "required": [
-        "name",
-        "habitat"
-      ]
-    }
-  }
-```
-
-Variables in prompt.yml files are templated using `{{variable}}` format and are
-supplied via the `input` parameter in YAML format. Additionally, you can
-provide file-based variables via `file_input`, where each key maps to a file
-path.
-
-### Prompt.yml with model parameters
-
-You can specify model parameters directly in your `.prompt.yml` files using the
-`modelParameters` key:
-
-```yaml
-messages:
-  - role: system
-    content: Be as concise as possible
-  - role: user
-    content: 'Compare {{a}} and {{b}}, please'
-model: openai/gpt-4o
-modelParameters:
-  maxCompletionTokens: 500
-  temperature: 0.7
-```
-
-| Key                   | Type   | Description                                           |
-| --------------------- | ------ | ----------------------------------------------------- |
-| `maxCompletionTokens` | number | The maximum number of tokens to generate              |
-| `maxTokens`           | number | The maximum number of tokens to generate (deprecated) |
-| `temperature`         | number | The sampling temperature to use (0-1)                 |
-| `topP`                | number | The nucleus sampling parameter to use (0-1)           |
-
-> ![Note]
-> Parameters set in `modelParameters` take precedence over the corresponding action inputs.
-
-### Using a system prompt file
-
-In addition to the regular prompt, you can provide a system prompt file instead
-of an inline system prompt:
-
-```yaml
-steps:
-  - name: Run AI Inference with System Prompt File
-    id: inference
-    uses: actions/ai-inference@v1
-    with:
-      prompt: 'Hello!'
-      system-prompt-file: './path/to/system-prompt.txt'
-```
-
-### Read output from file instead of output
-
-This can be useful when model response exceeds actions output limit
-
-```yaml
-steps:
-  - name: Test Local Action
-    id: inference
-    uses: actions/ai-inference@v1
-    with:
-      prompt: 'Hello!'
-
-  - name: Use Response File
-    run: |
-      echo "Response saved to: ${{ steps.inference.outputs.response-file }}"
-      cat "${{ steps.inference.outputs.response-file }}"
-```
-
-### Using custom headers
-
-You can include custom HTTP headers in your API requests, which is useful for integrating with API Management platforms, adding tracking information, or routing requests through custom gateways.
-
-#### YAML format (recommended for multiple headers)
-
-```yaml
-steps:
-  - name: AI Inference with Azure APIM
-    id: inference
-    uses: actions/ai-inference@v1
-    with:
-      prompt: 'Analyze this code for security issues...'
-      endpoint: ${{ secrets.APIM_ENDPOINT }}
-      token: ${{ secrets.APIM_KEY }}
-      custom-headers: |
-        Ocp-Apim-Subscription-Key: ${{ secrets.APIM_SUBSCRIPTION_KEY }}
-        serviceName: code-review-workflow
-        env: production
-        team: security
-        computer: github-actions
-```
-
-#### JSON format (alternative for compact syntax)
-
-```yaml
-steps:
-  - name: AI Inference with Custom Headers
-    id: inference
-    uses: actions/ai-inference@v1
-    with:
-      prompt: 'Hello!'
-      custom-headers: '{"X-Custom-Header": "value", "X-Team": "engineering", "X-Request-ID": "${{ github.run_id }}"}'
-```
-
-#### Use cases for custom headers
-
-- **API Management**: Integrate with Azure APIM, AWS API Gateway, Kong, or other API management platforms
-- **Request tracking**: Add correlation IDs, request IDs, or workflow identifiers
-- **Rate limiting**: Include quota or tier information for custom rate limiting
-- **Multi-tenancy**: Identify teams, services, or environments
-- **Observability**: Add metadata for logging, monitoring, and debugging
-- **Routing**: Control request routing through custom gateways or load balancers
-
-**Header name requirements**: Header names must follow the HTTP token syntax defined in RFC 7230 (which permits underscores). For maximum compatibility with intermediaries and tooling, we recommend using only alphanumeric characters and hyphens.
-
-**Security note**: Always use GitHub secrets for sensitive header values like API keys, tokens, or passwords. The action automatically masks common sensitive headers (containing `key`, `token`, `secret`, `password`, or `authorization`) in logs.
-
-### Using GitHub Copilot CLI as the inference provider
-
-By default the action calls the [GitHub Models](https://github.com/marketplace/models) REST API. You can instead route inference through the [GitHub Copilot CLI](https://docs.github.com/en/copilot/how-tos/copilot-cli/automate-copilot-cli/automate-with-actions) by setting `provider: copilot`.
-
-Because the Copilot CLI is not pre-installed on GitHub-hosted runners, you'll need to install and authenticate it in earlier steps before invoking this action. The pattern follows [the official GitHub Actions docs](https://docs.github.com/en/copilot/how-tos/copilot-cli/automate-copilot-cli/automate-with-actions):
-
-```yaml
-name: 'AI inference (Copilot)'
+name: AI inference
 on: workflow_dispatch
 
 jobs:
@@ -256,173 +32,117 @@ jobs:
         id: inference
         uses: actions/ai-inference@v1
         with:
-          prompt: 'Summarise the latest changes in this repo.'
-          provider: copilot
-          model: gpt-4.1 # any model the Copilot CLI accepts; omit to use the CLI default
+          prompt: Summarize the latest changes in this repository.
+          model: gpt-4.1
         env:
-          # Create a fine-grained PAT with the "Copilot Requests" permission and
-          # store it as a repository secret. See the docs linked above.
           COPILOT_GITHUB_TOKEN: ${{ secrets.COPILOT_PAT }}
 
-      - run: echo "${{ steps.inference.outputs.response }}"
+      - name: Print output
+        run: echo "${{ steps.inference.outputs.response }}"
 ```
 
-Notes when `provider: copilot`:
+## Prompt Files
 
-- The Copilot CLI must be on `PATH` (or pass `copilot-cli-path`) and authenticated via `COPILOT_GITHUB_TOKEN` (or another env var Copilot CLI accepts) before this action runs.
-- The action's default model (`openai/gpt-4o`) is a GitHub Models identifier and is not forwarded to Copilot. Set `model:` to a Copilot-compatible model (e.g. `gpt-4.1`, `claude-sonnet-4.5`) when you want to override the CLI default.
-- `enable-github-mcp`, `custom-headers`, `endpoint`, and `responseFormat` / `jsonSchema` are ignored under this provider — Copilot has its own tools and configuration mechanism. Use `copilot-allow-tools` (e.g. `shell(git:*),write`) to opt in to specific Copilot tools.
-- The action invokes the CLI with `-p <prompt> -s --no-ask-user`, so it never blocks on interactive prompts and stdout is just the model response.
-- **Permissions are denied by default.** No `--allow-tool` flags are passed unless you set `copilot-allow-tools`, so Copilot can't run shell commands, write files, or fetch URLs out of the box.
+You can provide prompt content inline or from files.
 
-### GitHub MCP Integration (Model Context Protocol)
-
-This action supports **read-only** integration with the GitHub-hosted Model
-Context Protocol (MCP) server, which provides access to GitHub tools like
-repository management, issue tracking, and pull request operations.
-
-#### Authentication
-
-You can authenticate the MCP server with **either**:
-
-1. **Personal Access Token (PAT)** – user-scoped token
-2. **GitHub App Installation Token** (`ghs_…`) – short-lived, app-scoped token
-   > The built-in `GITHUB_TOKEN` is **not** accepted by the MCP server.
-   > Using a **GitHub App installation token** is recommended in most CI environments because it is short-lived and least-privilege by design.
-
-#### Enabling MCP in the action
-
-Set `enable-github-mcp: true` and provide a token via `github-mcp-token`.
+### Text prompt file
 
 ```yaml
 steps:
-  - name: AI Inference with GitHub Tools
+  - name: Run AI Inference with Text File
     id: inference
-    uses: actions/ai-inference@v1.2
+    uses: actions/ai-inference@v1
     with:
-      prompt: 'List my open pull requests and create a summary'
-      enable-github-mcp: true
-      token: ${{ secrets.USER_PAT }} # or a ghs_ installation token
+      prompt-file: ./.github/prompts/prompt.txt
 ```
 
-If you want, you can use separate tokens for the AI inference endpoint
-and the GitHub MCP server:
+### Structured .prompt.yml file
 
 ```yaml
 steps:
-  - name: AI Inference with Separate MCP Token
+  - name: Run AI Inference with Prompt YAML
     id: inference
-    uses: actions/ai-inference@v1.2
+    uses: actions/ai-inference@v1
     with:
-      prompt: 'List my open pull requests and create a summary'
-      enable-github-mcp: true
-      token: ${{ secrets.GITHUB_TOKEN }}
-      github-mcp-token: ${{ secrets.USER_PAT }} # or a ghs_ installation token
+      prompt-file: ./.github/prompts/sample.prompt.yml
+      input: |
+        repo: actions/ai-inference
+      file_input: |
+        diff: ./artifacts/diff.txt
 ```
 
-#### Configuring GitHub MCP Toolsets
+Example:
 
-By default, the GitHub MCP server provides a standard set of tools (`context`, `repos`, `issues`, `pull_requests`, `users`). You can customize which toolsets are available by specifying the `github-mcp-toolsets` parameter:
+```yaml
+messages:
+  - role: system
+    content: Be concise and concrete.
+  - role: user
+    content: Summarize changes for {{repo}} using this diff:\n{{diff}}
+model: gpt-4.1
+```
+
+## System Prompt File
 
 ```yaml
 steps:
-  - name: AI Inference with Custom Toolsets
+  - name: Run AI Inference with System Prompt File
     id: inference
-    uses: actions/ai-inference@v2
+    uses: actions/ai-inference@v1
     with:
-      prompt: 'Analyze recent workflow runs and check security alerts'
-      enable-github-mcp: true
-      token: ${{ secrets.USER_PAT }}
-      github-mcp-toolsets: 'repos,issues,pull_requests,actions,code_security'
+      prompt: Hello
+      system-prompt-file: ./.github/prompts/system.txt
 ```
 
-**Available toolsets:**
-See: [Tool configuration](https://github.com/github/github-mcp-server/blob/main/README.md#tool-configuration)
+## Response File Output
 
-When MCP is enabled, the AI model will have access to GitHub tools and can
-perform actions like searching issues and PRs.
+The action writes the model response to a temporary file and exposes the path via `response-file`.
+
+```yaml
+steps:
+  - name: Run AI Inference
+    id: inference
+    uses: actions/ai-inference@v1
+    with:
+      prompt: Hello
+
+  - name: Use Response File
+    run: |
+      echo "Response saved to: ${{ steps.inference.outputs.response-file }}"
+      cat "${{ steps.inference.outputs.response-file }}"
+```
 
 ## Inputs
 
-Various inputs are defined in [`action.yml`](action.yml) to let you configure
-the action:
+Inputs are defined in `action.yml`.
 
-| Name                    | Description                                                                                                                                                                                                             | Default                              |
-| ----------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------ |
-| `token`                 | Token to use for inference. Typically the GITHUB_TOKEN secret                                                                                                                                                           | `github.token`                       |
-| `prompt`                | The prompt to send to the model                                                                                                                                                                                         | N/A                                  |
-| `prompt-file`           | Path to a file containing the prompt (supports .txt and .prompt.yml formats). If both `prompt` and `prompt-file` are provided, `prompt-file` takes precedence                                                           | `""`                                 |
-| `input`                 | Template variables in YAML format for .prompt.yml files (e.g., `var1: value1` on separate lines)                                                                                                                        | `""`                                 |
-| `file_input`            | Template variables in YAML where values are file paths. The file contents are read and used for templating                                                                                                              | `""`                                 |
-| `system-prompt`         | The system prompt to send to the model                                                                                                                                                                                  | `"You are a helpful assistant"`      |
-| `system-prompt-file`    | Path to a file containing the system prompt. If both `system-prompt` and `system-prompt-file` are provided, `system-prompt-file` takes precedence                                                                       | `""`                                 |
-| `model`                 | The model to use for inference. Must be available in the [GitHub Models](https://github.com/marketplace?type=models) catalog                                                                                            | `openai/gpt-4o`                      |
-| `endpoint`              | The endpoint to use for inference. If you're running this as part of an org, you should probably use the org-specific Models endpoint                                                                                   | `https://models.github.ai/inference` |
-| `max-tokens`            | The maximum number of tokens to generate (deprecated, use `max-completion-tokens` instead)                                                                                                                              | 200                                  |
-| `max-completion-tokens` | The maximum number of tokens to generate                                                                                                                                                                                | `""`                                 |
-| `temperature`           | The sampling temperature to use (0-1)                                                                                                                                                                                   | `""`                                 |
-| `top-p`                 | The nucleus sampling parameter to use (0-1)                                                                                                                                                                             | `""`                                 |
-| `enable-github-mcp`     | Enable Model Context Protocol integration with GitHub tools                                                                                                                                                             | `false`                              |
-| `github-mcp-token`      | Token to use for GitHub MCP server (defaults to the main token if not specified).                                                                                                                                       | `""`                                 |
-| `custom-headers`        | Custom HTTP headers to include in API requests. Supports both YAML format (`header1: value1`) and JSON format (`{"header1": "value1"}`). Useful for API Management platforms, rate limiting, and request tracking.      | `""`                                 |
-| `provider`              | Inference provider to use. `github-models` (default) calls the GitHub Models REST API. `copilot` shells out to the GitHub Copilot CLI, which must be installed and authenticated on the runner before this action runs. | `github-models`                      |
-| `copilot-cli-path`      | Path to the Copilot CLI binary (only used when `provider: copilot`). Defaults to `copilot` on `PATH`.                                                                                                                   | `""`                                 |
-| `copilot-allow-tools`   | Comma-separated list of tools to allow when `provider: copilot` (passed through as `--allow-tool`). Example: `shell(git:*),write`.                                                                                      | `""`                                 |
+| Name | Description | Default |
+| --- | --- | --- |
+| `prompt` | Inline user prompt. | `""` |
+| `prompt-file` | Path to prompt file (`.txt` or `.prompt.yml`). When both are set, this takes precedence over `prompt`. | `""` |
+| `input` | YAML template variables for `.prompt.yml` files. | `""` |
+| `file_input` | YAML map of template variable names to file paths; file contents are injected into templates. | `""` |
+| `model` | Model to pass to Copilot CLI (for example `gpt-4.1`, `claude-sonnet-4.5`). Set empty to let CLI choose its default. | `gpt-4.1` |
+| `system-prompt` | Inline system prompt. | `You are a helpful assistant` |
+| `system-prompt-file` | Path to system prompt file. When both are set, this takes precedence over `system-prompt`. | `""` |
+| `token` | Token value masked by the action. Defaults to `github.token`. | `github.token` |
+| `provider` | Inference provider. Only `copilot` is supported. | `copilot` |
+| `copilot-cli-path` | Path to Copilot CLI binary. If empty, uses `copilot` on `PATH`. | `""` |
+| `copilot-allow-tools` | Comma-separated list of `--allow-tool` values passed to Copilot CLI. | `""` |
 
 ## Outputs
 
-The AI inference action provides the following outputs:
+| Name | Description |
+| --- | --- |
+| `response` | Model response text. |
+| `response-file` | Path to temp file containing the response text. |
 
-| Name            | Description                                                             |
-| --------------- | ----------------------------------------------------------------------- |
-| `response`      | The response from the model                                             |
-| `response-file` | The file path where the response is saved (useful for larger responses) |
+## Notes
 
-## Required Permissions
-
-In order to run inference with GitHub Models, the GitHub AI inference action
-requires `models` permissions.
-
-```yml
-permissions:
-  contents: read
-  models: read
-```
+- The action invokes Copilot CLI with `-p <prompt> -s --no-ask-user`.
+- No `--allow-tool` flags are passed unless you set `copilot-allow-tools`.
+- Ensure Copilot CLI authentication is configured on the runner, typically via `COPILOT_GITHUB_TOKEN`.
 
 ## Publishing a New Release
 
-This project includes a helper script, [`script/release`](./script/release)
-designed to streamline the process of tagging and pushing new releases for
-GitHub Actions. For more information, see
-[Versioning](https://github.com/actions/toolkit/blob/master/docs/action-versioning.md)
-in the GitHub Actions toolkit.
-
-GitHub Actions allows users to select a specific version of the action to use,
-based on release tags. This script simplifies this process by performing the
-following steps:
-
-1. **Retrieving the latest release tag:** The script starts by fetching the most
-   recent SemVer release tag of the current branch, by looking at the local data
-   available in your repository.
-1. **Prompting for a new release tag:** The user is then prompted to enter a new
-   release tag. To assist with this, the script displays the tag retrieved in
-   the previous step, and validates the format of the inputted tag (vX.X.X). The
-   user is also reminded to update the version field in package.json.
-1. **Tagging the new release:** The script then tags a new release and syncs the
-   separate major tag (e.g. v1, v2) with the new release tag (e.g. v1.0.0,
-   v2.1.2). When the user is creating a new major release, the script
-   auto-detects this and creates a `releases/v#` branch for the previous major
-   version.
-1. **Pushing changes to remote:** Finally, the script pushes the necessary
-   commits, tags and branches to the remote repository. From here, you will need
-   to create a new release in GitHub so users can easily reference the new tags
-   in their workflows.
-
-## License
-
-This project is licensed under the terms of the MIT open source license. Please
-refer to [MIT](./LICENSE.txt) for the full terms.
-
-## Contributions
-
-Contributions are welcome! See the [Contributor's Guide](CONTRIBUTING.md).
+This project includes a helper script, `script/release`, to streamline tagging and pushing new releases for GitHub Actions. For more information, see [Versioning](https://github.com/actions/toolkit/blob/master/docs/action-versioning.md) in the GitHub Actions toolkit.
