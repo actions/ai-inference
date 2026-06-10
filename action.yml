@@ -27,13 +27,9 @@ inputs:
     required: false
     default: ''
   model:
-    description: The model to use
+    description: The model to use. Must be a model the Copilot CLI accepts (e.g. "gpt-4.1", "claude-sonnet-4.5"). Set to an empty string to let the Copilot CLI pick its default.
     required: false
-    default: 'openai/gpt-4o'
-  endpoint:
-    description: The endpoint to use
-    required: false
-    default: 'https://models.github.ai/inference'
+    default: 'gpt-4.1'
   system-prompt:
     description: The system prompt for the model
     required: false
@@ -42,52 +38,20 @@ inputs:
     description: Path to a file containing the system prompt
     required: false
     default: ''
-  max-tokens:
-    description: The maximum number of tokens to generate (deprecated)
-    required: false
-    default: '200'
-  max-completion-tokens:
-    description: The maximum number of tokens to generate
-    required: false
-    default: ''
-  temperature:
-    description: The sampling temperature to use (0-1)
-    required: false
-    default: ''
-  top-p:
-    description: The nucleus sampling parameter to use (0-1)
-    required: false
-    default: ''
   token:
     description: The token to use
     required: false
     default: ${{ github.token }}
-  enable-github-mcp:
-    description: Enable Model Context Protocol integration with GitHub tools
-    required: false
-    default: 'false'
-  github-mcp-token:
-    description: The token to use for GitHub MCP server (defaults to the main token if not specified). This must be a PAT for MCP to work.
-    required: false
-    default: ''
-  github-mcp-toolsets:
-    description: 'Comma-separated list of toolsets to enable for GitHub MCP (e.g., "repos,issues,pull_requests,actions"). Use "all" for all toolsets, "default" for default set. If not specified, uses default toolsets (context,repos,issues,pull_requests,users).'
-    required: false
-    default: ''
-  custom-headers:
-    description: 'Custom HTTP headers to include in API requests. Supports both YAML format (header1: value1) and JSON format ({"header1": "value1"}). Useful for API Management platforms, rate limiting, and request tracking.'
-    required: false
-    default: ''
   provider:
-    description: 'Inference provider to use. "github-models" (default) calls the GitHub Models REST API. "copilot" shells out to the GitHub Copilot CLI, which must be installed and authenticated on the runner before this action runs (see README for an example workflow).'
+    description: 'Inference provider to use. Only "copilot" is supported; the action shells out to the GitHub Copilot CLI, which must be installed and authenticated on the runner before this action runs (see README for an example workflow).'
     required: false
-    default: 'github-models'
+    default: 'copilot'
   copilot-cli-path:
-    description: 'Path to the Copilot CLI binary (only used when provider is "copilot"). Defaults to "copilot" on PATH.'
+    description: 'Path to the Copilot CLI binary. Defaults to "copilot" on PATH.'
     required: false
     default: ''
   copilot-allow-tools:
-    description: 'Comma-separated list of tools to allow when provider is "copilot" (passed through as --allow-tool). Example: "shell(git:*),write".'
+    description: 'Comma-separated list of tools to allow (passed through as --allow-tool). Example: "shell(git:*),write".'
     required: false
     default: ''
 
