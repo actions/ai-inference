@@ -3,7 +3,8 @@ import * as fs from 'fs'
 import * as tmp from 'tmp'
 import {connectToGitHubMCP} from './mcp.js'
 import {simpleInference, mcpInference} from './inference.js'
-import {loadContentFromFileOrInput, buildInferenceRequest, parseCustomHeaders} from './helpers.js'
+import {copilotInference} from './copilot.js'
+import {loadContentFromFileOrInput, buildInferenceRequest, parseCustomHeaders, safeExit} from './helpers.js'
 import {
   loadPromptFile,
   parseTemplateVariables,
@@ -11,6 +12,24 @@ import {
   PromptConfig,
   parseFileTemplateVariables,
 } from './prompt.js'
+
+const SUPPORTED_PROVIDERS = ['github-models', 'copilot'] as const
+type Provider = (typeof SUPPORTED_PROVIDERS)[number]
+
+function parseProvider(value: string): Provider {
+  const normalized = (value || '').trim().toLowerCase()
+  if (normalized === '' || normalized === 'github-models') return 'github-models'
+  if (normalized === 'copilot') return 'copilot'
+  throw new Error(`Unsupported provider "${value}" (expected one of: ${SUPPORTED_PROVIDERS.join(', ')})`)
+}
+
+function parseAllowTools(input: string): string[] {
+  if (!input) return []
+  return input
+    .split(',')
+    .map(s => s.trim())
+    .filter(s => s.length > 0)
+}
 
 /**
  * The main function for the action.
@@ -98,10 +117,28 @@ export async function run(): Promise<void> {
     )
 
     const enableMcp = core.getBooleanInput('enable-github-mcp') || false
+    const provider = parseProvider(core.getInput('provider'))
 
     let modelResponse: string | null = null
 
-    if (enableMcp) {
+    if (provider === 'copilot') {
+      if (enableMcp) {
+        core.warning('enable-github-mcp is ignored when provider is "copilot"')
+      }
+      if (inferenceRequest.responseFormat) {
+        core.warning('responseFormat / jsonSchema is ignored when provider is "copilot"')
+      }
+      if (customHeadersInput) {
+        core.warning('custom-headers is ignored when provider is "copilot"')
+      }
+
+      modelResponse = await copilotInference({
+        messages: inferenceRequest.messages,
+        model: modelName,
+        cliPath: core.getInput('copilot-cli-path') || undefined,
+        allowTools: parseAllowTools(core.getInput('copilot-allow-tools')),
+      })
+    } else if (enableMcp) {
       const mcpClient = await connectToGitHubMCP(githubMcpToken, githubMcpToolsets)
 
       if (mcpClient) {
@@ -136,10 +173,8 @@ export async function run(): Promise<void> {
     } else {
       core.setFailed(`An unexpected error occurred: ${JSON.stringify(error, null, 2)}`)
     }
-    // Force exit to prevent hanging on open connections
-    process.exit(1)
+    await safeExit(1)
   }
 
-  // Force exit to prevent hanging on open connections
-  process.exit(0)
+  await safeExit(0)
 }

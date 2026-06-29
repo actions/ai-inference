@@ -78,6 +78,18 @@ inputs:
     description: 'Custom HTTP headers to include in API requests. Supports both YAML format (header1: value1) and JSON format ({"header1": "value1"}). Useful for API Management platforms, rate limiting, and request tracking.'
     required: false
     default: ''
+  provider:
+    description: 'Inference provider to use. "github-models" (default) calls the GitHub Models REST API. "copilot" shells out to the GitHub Copilot CLI, which must be installed and authenticated on the runner before this action runs (see README for an example workflow).'
+    required: false
+    default: 'github-models'
+  copilot-cli-path:
+    description: 'Path to the Copilot CLI binary (only used when provider is "copilot"). Defaults to "copilot" on PATH.'
+    required: false
+    default: ''
+  copilot-allow-tools:
+    description: 'Comma-separated list of tools to allow when provider is "copilot" (passed through as --allow-tool). Example: "shell(git:*),write".'
+    required: false
+    default: ''
 
 # Define your outputs here.
 outputs:

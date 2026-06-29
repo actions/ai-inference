@@ -1,6 +1,6 @@
 ---
 name: mime-types
-version: 3.0.1
+version: 3.0.2
 type: npm
 summary: The ultimate javascript content-type utility.
 homepage:

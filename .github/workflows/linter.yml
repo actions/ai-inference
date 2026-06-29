@@ -52,3 +52,8 @@ jobs:
           VALIDATE_JSON: false
           VALIDATE_TYPESCRIPT_STANDARD: false
           VALIDATE_GITHUB_ACTIONS: false # false until linter schemas are updated to include the models permission
+          # Biome conflicts with the project's Prettier+ESLint setup (tabs vs spaces,
+          # double vs single quotes, semicolons). Same rationale as the standard/ES
+          # disables above — pick one toolchain per concern.
+          VALIDATE_BIOME_FORMAT: false
+          VALIDATE_BIOME_LINT: false

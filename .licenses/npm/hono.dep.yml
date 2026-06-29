@@ -1,6 +1,6 @@
 ---
 name: hono
-version: 4.11.3
+version: 4.12.7
 type: npm
 summary: Web framework built on Web Standards
 homepage: https://hono.dev

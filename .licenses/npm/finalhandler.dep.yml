@@ -1,6 +1,6 @@
 ---
 name: finalhandler
-version: 2.1.0
+version: 2.1.1
 type: npm
 summary: Node.js final http responder
 homepage:
@@ -44,4 +44,6 @@ licenses:
     [downloads-url]: https://npmjs.org/package/finalhandler
     [github-actions-ci-image]: https://github.com/pillarjs/finalhandler/actions/workflows/ci.yml/badge.svg
     [github-actions-ci-url]: https://github.com/pillarjs/finalhandler/actions/workflows/ci.yml
+    [ossf-scorecard-badge]: https://api.scorecard.dev/projects/github.com/pillarjs/finalhandler/badge
+    [ossf-scorecard-visualizer]: https://ossf.github.io/scorecard-visualizer/#/projects/github.com/pillarjs/finalhandler
 notices: []
