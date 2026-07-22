@@ -116,25 +116,25 @@ steps:
 
 Inputs are defined in `action.yml`.
 
-| Name | Description | Default |
-| --- | --- | --- |
-| `prompt` | Inline user prompt. | `""` |
-| `prompt-file` | Path to prompt file (`.txt` or `.prompt.yml`). When both are set, this takes precedence over `prompt`. | `""` |
-| `input` | YAML template variables for `.prompt.yml` files. | `""` |
-| `file_input` | YAML map of template variable names to file paths; file contents are injected into templates. | `""` |
-| `model` | Model to pass to Copilot CLI (for example `gpt-4.1`, `claude-sonnet-4.5`). Set empty to let CLI choose its default. | `gpt-4.1` |
-| `system-prompt` | Inline system prompt. | `You are a helpful assistant` |
-| `system-prompt-file` | Path to system prompt file. When both are set, this takes precedence over `system-prompt`. | `""` |
-| `token` | Token value masked by the action. Defaults to `github.token`. | `github.token` |
-| `provider` | Inference provider. Only `copilot` is supported. | `copilot` |
-| `copilot-cli-path` | Path to Copilot CLI binary. If empty, uses `copilot` on `PATH`. | `""` |
-| `copilot-allow-tools` | Comma-separated list of `--allow-tool` values passed to Copilot CLI. | `""` |
+| Name                  | Description                                                                                                         | Default                       |
+| --------------------- | ------------------------------------------------------------------------------------------------------------------- | ----------------------------- |
+| `prompt`              | Inline user prompt.                                                                                                 | `""`                          |
+| `prompt-file`         | Path to prompt file (`.txt` or `.prompt.yml`). When both are set, this takes precedence over `prompt`.              | `""`                          |
+| `input`               | YAML template variables for `.prompt.yml` files.                                                                    | `""`                          |
+| `file_input`          | YAML map of template variable names to file paths; file contents are injected into templates.                       | `""`                          |
+| `model`               | Model to pass to Copilot CLI (for example `gpt-4.1`, `claude-sonnet-4.5`). Set empty to let CLI choose its default. | `gpt-4.1`                     |
+| `system-prompt`       | Inline system prompt.                                                                                               | `You are a helpful assistant` |
+| `system-prompt-file`  | Path to system prompt file. When both are set, this takes precedence over `system-prompt`.                          | `""`                          |
+| `token`               | Token value masked by the action. Defaults to `github.token`.                                                       | `github.token`                |
+| `provider`            | Inference provider. Only `copilot` is supported.                                                                    | `copilot`                     |
+| `copilot-cli-path`    | Path to Copilot CLI binary. If empty, uses `copilot` on `PATH`.                                                     | `""`                          |
+| `copilot-allow-tools` | Comma-separated list of `--allow-tool` values passed to Copilot CLI.                                                | `""`                          |
 
 ## Outputs
 
-| Name | Description |
-| --- | --- |
-| `response` | Model response text. |
+| Name            | Description                                     |
+| --------------- | ----------------------------------------------- |
+| `response`      | Model response text.                            |
 | `response-file` | Path to temp file containing the response text. |
 
 ## Notes
