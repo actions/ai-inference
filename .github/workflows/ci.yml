@@ -61,6 +61,9 @@ jobs:
         with:
           node-version-file: .node-version
 
+      - name: Install Copilot CLI
+        run: npm install -g @github/copilot
+
       - name: Start Mock Inference Server
         id: mock-server
         run: |
@@ -114,6 +117,9 @@ jobs:
         uses: actions/setup-node@v6
         with:
           node-version-file: .node-version
+
+      - name: Install Copilot CLI
+        run: npm install -g @github/copilot
 
       - name: Start Mock Inference Server
         id: mock-server
