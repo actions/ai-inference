@@ -75,16 +75,19 @@ jobs:
 
       - name: Print Output
         id: output
-        run: echo "${{ steps.test-action.outputs.response }}"
+        env:
+          RESPONSE: ${{ steps.test-action.outputs.response }}
+        run: printf '%s\n' "$RESPONSE"
 
       - name: Verify Output
+        env:
+          RESPONSE: ${{ steps.test-action.outputs.response }}
         run: |
-          response="${{ steps.test-action.outputs.response }}"
-          if [[ -z "$response" ]]; then
+          if [[ -z "$RESPONSE" ]]; then
             echo "Error: No response received"
             exit 1
           fi
-          echo "Response received: $response"
+          printf 'Response received: %s\n' "$RESPONSE"
 
   test-action-prompt-file:
     name: GitHub Actions Test with Prompt File
