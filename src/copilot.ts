@@ -8,11 +8,6 @@ export interface CopilotInferenceRequest {
   allowTools?: string[]
 }
 
-// The action's default model is openai/gpt-4o, which is a GitHub Models identifier
-// and not a valid Copilot CLI model. When the user hasn't overridden the model we
-// omit --model and let Copilot choose its default.
-export const DEFAULT_GITHUB_MODELS_MODEL = 'openai/gpt-4o'
-
 interface RunResult {
   stdout: string
   stderr: string
@@ -97,9 +92,7 @@ export async function copilotInference(
   // to use shell, write, fetch, etc. unless the consumer opts in via copilot-allow-tools.
   const args = ['-p', fullPrompt, '-s', '--no-ask-user']
 
-  // Only forward --model when the user explicitly picked something other than
-  // the GitHub Models default (which is not a valid Copilot model).
-  if (request.model && request.model !== DEFAULT_GITHUB_MODELS_MODEL) {
+  if (request.model && request.model.trim() !== '') {
     args.push('--model', request.model)
   }
 

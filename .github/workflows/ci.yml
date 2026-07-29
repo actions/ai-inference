@@ -61,45 +61,33 @@ jobs:
         with:
           node-version-file: .node-version
 
-      - name: Start Mock Inference Server
-        id: mock-server
-        run: |
-          node script/mock-inference-server.mjs &
-          echo "pid=$!" >> $GITHUB_OUTPUT
-          # Wait for server to be ready
-          for i in {1..10}; do
-            if curl -s http://localhost:3456/health > /dev/null; then
-              echo "Mock server is ready"
-              break
-            fi
-            sleep 1
-          done
+      - name: Prepare Mock Copilot CLI
+        run: chmod +x script/mock-copilot-cli.mjs
 
       - name: Test Local Action
         id: test-action
         uses: ./
         with:
           prompt: hello
-          endpoint: http://localhost:3456
+          copilot-cli-path: script/mock-copilot-cli.mjs
         env:
           GITHUB_TOKEN: ${{ github.token }}
 
       - name: Print Output
         id: output
-        run: echo "${{ steps.test-action.outputs.response }}"
+        env:
+          RESPONSE: ${{ steps.test-action.outputs.response }}
+        run: printf '%s\n' "$RESPONSE"
 
       - name: Verify Output
+        env:
+          RESPONSE: ${{ steps.test-action.outputs.response }}
         run: |
-          response="${{ steps.test-action.outputs.response }}"
-          if [[ -z "$response" ]]; then
+          if [[ -z "$RESPONSE" ]]; then
             echo "Error: No response received"
             exit 1
           fi
-          echo "Response received: $response"
-
-      - name: Stop Mock Server
-        if: always()
-        run: kill ${{ steps.mock-server.outputs.pid }} || true
+          printf 'Response received: %s\n' "$RESPONSE"
 
   test-action-prompt-file:
     name: GitHub Actions Test with Prompt File
@@ -115,19 +103,8 @@ jobs:
         with:
           node-version-file: .node-version
 
-      - name: Start Mock Inference Server
-        id: mock-server
-        run: |
-          node script/mock-inference-server.mjs &
-          echo "pid=$!" >> $GITHUB_OUTPUT
-          # Wait for server to be ready
-          for i in {1..10}; do
-            if curl -s http://localhost:3456/health > /dev/null; then
-              echo "Mock server is ready"
-              break
-            fi
-            sleep 1
-          done
+      - name: Prepare Mock Copilot CLI
+        run: chmod +x script/mock-copilot-cli.mjs
 
       - name: Create Prompt File
         run: echo "hello" > prompt.txt
@@ -141,7 +118,7 @@ jobs:
         with:
           prompt-file: prompt.txt
           system-prompt-file: system-prompt.txt
-          endpoint: http://localhost:3456
+          copilot-cli-path: script/mock-copilot-cli.mjs
         env:
           GITHUB_TOKEN: ${{ github.token }}
 
@@ -163,7 +140,3 @@ jobs:
             exit 1
           fi
           echo "Response file content: $content"
-
-      - name: Stop Mock Server
-        if: always()
-        run: kill ${{ steps.mock-server.outputs.pid }} || true

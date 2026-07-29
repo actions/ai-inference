@@ -3,7 +3,7 @@ import * as core from '../__fixtures__/core.js'
 
 vi.mock('@actions/core', () => core)
 
-const {copilotInference, buildCopilotPrompt, DEFAULT_GITHUB_MODELS_MODEL} = await import('../src/copilot.js')
+const {copilotInference, buildCopilotPrompt} = await import('../src/copilot.js')
 
 type RunResult = {stdout: string; stderr: string; exitCode: number | null}
 
@@ -66,7 +66,7 @@ describe('copilotInference', () => {
           {role: 'system', content: 'Be brief.'},
           {role: 'user', content: 'Say hi.'},
         ],
-        model: DEFAULT_GITHUB_MODELS_MODEL,
+        model: 'gpt-4.1',
       },
       spawner,
     )
@@ -79,8 +79,8 @@ describe('copilotInference', () => {
     expect(args[1]).toBe('Be brief.\n\nSay hi.')
     expect(args).toContain('--no-ask-user')
     expect(args).toContain('-s')
-    // Default github-models model should NOT be forwarded
-    expect(args).not.toContain('--model')
+    expect(args).toContain('--model')
+    expect(args).toContain('gpt-4.1')
   })
 
   it('forwards a non-default model via --model', async () => {
