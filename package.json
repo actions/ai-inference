@@ -49,7 +49,7 @@
     "prettier-eslint": "^17.1.1",
     "rollup": "^4.62.4",
     "typescript": "^5.9.3",
-    "vitest": "^3"
+    "vitest": "^4"
   },
   "optionalDependencies": {
     "@rollup/rollup-linux-x64-gnu": "*"
