@@ -30,7 +30,7 @@
   },
   "devDependencies": {
     "@eslint/compat": "^2.1.0",
-    "@github/local-action": "^5.1.0",
+    "@github/local-action": "^7.0.1",
     "@github/prettier-config": "^0.0.6",
     "@rollup/plugin-commonjs": "^29.0.3",
     "@rollup/plugin-json": "^6.1.0",
