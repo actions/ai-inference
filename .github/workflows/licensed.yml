@@ -23,6 +23,7 @@ jobs:
   licensed:
     name: Check Licenses
     runs-on: ubuntu-latest
+    cache-mode: read
 
     steps:
       - name: Checkout
