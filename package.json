@@ -25,12 +25,12 @@
   "dependencies": {
     "@actions/core": "^3.0.1",
     "@types/tmp": "^0.2.6",
-    "js-yaml": "^4.3.0",
+    "js-yaml": "^4.3.1",
     "tmp": "^0.2.7"
   },
   "devDependencies": {
     "@eslint/compat": "^2.1.0",
-    "@github/local-action": "^5.1.0",
+    "@github/local-action": "^7.0.1",
     "@github/prettier-config": "^0.0.6",
     "@rollup/plugin-commonjs": "^29.0.3",
     "@rollup/plugin-json": "^6.1.0",
@@ -49,9 +49,12 @@
     "prettier-eslint": "^17.1.1",
     "rollup": "^4.62.4",
     "typescript": "^5.9.3",
-    "vitest": "^3"
+    "vitest": "^4.1.11"
   },
   "optionalDependencies": {
     "@rollup/rollup-linux-x64-gnu": "*"
+  },
+  "overrides": {
+    "undici": "^6.28.0"
   }
 }
