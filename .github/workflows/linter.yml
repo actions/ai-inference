@@ -17,6 +17,7 @@ jobs:
   lint:
     name: Lint Codebase
     runs-on: ubuntu-latest
+    cache-mode: read
 
     steps:
       - name: Checkout
