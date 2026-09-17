@@ -29,7 +29,7 @@
     "tmp": "^0.2.7"
   },
   "devDependencies": {
-    "@eslint/compat": "^2.1.0",
+    "@eslint/compat": "^2.1.1",
     "@github/local-action": "^7.0.1",
     "@github/prettier-config": "^0.0.6",
     "@rollup/plugin-commonjs": "^29.0.3",
@@ -37,8 +37,8 @@
     "@rollup/plugin-node-resolve": "^16.0.3",
     "@rollup/plugin-typescript": "^12.3.0",
     "@types/js-yaml": "^4.0.9",
-    "@types/node": "^24.13.2",
-    "@typescript-eslint/eslint-plugin": "^8.66.0",
+    "@types/node": "^24.13.4",
+    "@typescript-eslint/eslint-plugin": "^8.70.0",
     "@typescript-eslint/parser": "^8.32.1",
     "eslint": "^9.29.0",
     "eslint-config-prettier": "^10.1.8",
@@ -46,8 +46,8 @@
     "eslint-plugin-import": "^2.32.0",
     "eslint-plugin-prettier": "^5.5.6",
     "prettier": "^3.8.5",
-    "prettier-eslint": "^17.1.1",
-    "rollup": "^4.62.4",
+    "prettier-eslint": "^17.1.2",
+    "rollup": "^4.63.1",
     "typescript": "^5.9.3",
     "vitest": "^4.1.11"
   },
